@@ -1,0 +1,7 @@
+name: report
+channels:
+  - conda-forge
+dependencies:
+  - r-rmarkdown=2.25
+  - r-tidyverse=2.0.0
+  - r-dt=0.31

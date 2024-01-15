@@ -1,0 +1,7 @@
+name: ngmlr
+channels:
+  - bioconda
+dependencies:
+  - ngmlr=0.2.7
+  - samtools=1.9
+  - bedtools=2.31.1

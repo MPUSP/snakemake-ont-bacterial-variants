@@ -1,0 +1,5 @@
+name: medaka
+channels:
+  - bioconda
+dependencies:
+  - medaka=1.11.3

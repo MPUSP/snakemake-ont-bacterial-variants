@@ -1,0 +1,727 @@
+---
+author:
+    - "snakemake-ont-bacterial-variants"
+    - "Max Planck Unit for the Science of Pathogens, Berlin, Germany"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+params:
+   rmd: "report.Rmd"
+output:
+  html_document: default
+  highlight: tango
+  number_sections: no
+  theme: default
+  toc: yes
+  toc_depth: 3
+  toc_float:
+    collapsed: no
+    smooth_scroll: yes
+---
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(DT)
+theme_update(plot.title = element_text(hjust = 0.5))
+sample <- snakemake@wildcards[["sample"]]
+libprepkit <- snakemake@config[["libprepkit"]]
+# Pore types
+porefrommodel <- strsplit(snakemake@config[["basecalling_model"]], "_")[[1]][1]
+if (porefrommodel == "r1041") {
+  poretype <- "R10.4.1"
+} else if (porefrommodel == "r941") {
+  poretype <- "R9.4.1"
+} else {
+  poretype <- "unclear"
+}
+# Basecalling
+accuracyfrommodel <- strsplit(snakemake@config[["basecalling_model"]], "_")[[1]][4]
+if (accuracyfrommodel == "fast") {
+  accuracy <- "fast"
+} else if (accuracyfrommodel == "hac") {
+  accuracy <- "high accuracy"
+} else if (accuracyfrommodel == "sup") {
+  accuracy <- "super accuracy"
+} else {
+  accuracy <- "unclear"
+}
+```
+
+---
+title: "Variant calling report: `r sample`"
+---
+
+***
+
+# Read quality control {.tabset}
+
+Libraries were prepared using the `r libprepkit` kit, and sequencing was performed on a `r poretype` flow cell. Reads were basecalled using the `r accuracy` basecalling model. <br><br>
+Reads were filtered using Filtlong (see [here](https://github.com/rrwick/Filtlong)) to enrich for long high-quality reads:
+```
+filtlong `r paste(snakemake@config[["filtlong"]][["params"]])` <RAWFASTQ>
+```
+<br>
+Please see the separate MultiQC report for more details on read quality. The most important metrics can be found here:
+
+- number of reads and total bases
+- mean and median read lengths
+- mean and median read quality scores (Phred-scaled error probablities, see [here](https://timkahlke.github.io/LongRead_tutorials/APP_MET.html))
+- read N50 (weighted midpoint of read lengths, see [here](https://timkahlke.github.io/LongRead_tutorials/APP_MET.html) )
+<br><br>
+
+```{r readqc, echo=FALSE, warning=FALSE}
+get_n50 <- function(lengths) {
+  sorted <- sort(lengths, decreasing = TRUE)
+  totallen <- sum(sorted)
+  cumulative <- 0
+  for (i in 1:length(sorted)) {
+    cumulative <- cumulative + sorted[i]
+    if (cumulative >= totallen / 2) {
+      return(sorted[i])
+    }
+  }
+}
+calculate_mean_qs <- function(quals) {
+  converted <- sapply(quals, function(x) 10**(-x/10))
+  meanprob <- mean(converted)
+  return(-10*log10(meanprob))
+  # Mean QS differs from NanoStats output due conversion to integers in NanoStats
+}
+calculate_metrics <- function(df) {
+  return(c(
+    as.integer(nrow(df)), round(sum(df$lengths)/1000000, 1), round(mean(df$lengths), 1), round(calculate_mean_qs(df$quals), 1),
+    round(median(df$lengths)), round(median(df$quals), 1), as.integer(get_n50(df$lengths))
+  ))
+}
+rawqc <- as.data.frame(read_tsv(snakemake@input[["rawreadqc"]], col_names = TRUE, col_types = c("n", "i")))
+filteredqc <- as.data.frame(read_tsv(snakemake@input[["filtreadqc"]], col_names = TRUE, col_types = c("n", "i")))
+qcdata <- data.frame(
+  raw = calculate_metrics(rawqc),
+  filtered = calculate_metrics(filteredqc)
+)
+DT::datatable(
+  t(qcdata),
+  colnames = c("reads", "read count", "total base count (Mb)", "mean length (bp)", "mean Phred quality", "median length (bp)", "median Phred quality", "read N50 (bp)"),
+)
+```
+
+
+```{r readqc.plot, echo=FALSE, warning=FALSE, out.width="75%", fig.align="center"}
+xmin <- 10 ** floor(log10(min(c(min(rawqc$lengths), min(filteredqc$lengths)))))
+xmax <- 10 ** ceiling(log10(max(c(max(rawqc$lengths), max(filteredqc$lengths)))))
+ymax <- ceiling(max(c(max(rawqc$quals), max(filteredqc$quals))))
+rawqcplot <- ggplot(data = rawqc, aes(x = lengths, y = quals)) +
+  stat_density2d(aes(fill = after_stat(level)), geom = "polygon") +
+  scale_x_log10(limits = c(xmin, xmax)) +
+  ylim(0, ymax) +
+  labs(x = "read length (bp)", y = "read quality score", title = "Raw reads", fill = "Density")
+filteredqcplot <- ggplot(data = filteredqc, aes(x = lengths, y = quals)) +
+  stat_density2d(aes(fill = after_stat(level)), geom = "polygon") +
+  scale_x_log10(limits = c(xmin, xmax)) +
+  ylim(0, ymax) +
+  labs(x = "read length (bp)", y = "read quality score", title = "Filtered reads", fill = "Density")
+```
+
+The distribution of read length and quality are shown in the following plots:
+
+## Raw reads
+```{r rawreadqc.plot, echo=FALSE, warning=FALSE, out.width="75%", fig.align="center"}
+rawqcplot
+```
+
+## Filtered reads
+```{r filteredreadqc.plot, echo=FALSE, warning=FALSE, out.width="75%", fig.align="center"}
+filteredqcplot
+```
+
+***
+
+# Mapping statistics {.tabset}
+
+```{r mapping.stats, echo=FALSE, warning=FALSE, fig.show="hold", out.width="50%"}
+# Import samtools summary file
+data <- readLines(as.character(snakemake@input[["mappingstats"]]))
+summary <- grep("^SN", data, value = TRUE)
+summary <- separate(data.frame(summary), col = 1, into = c("ID", "Name", "Value"), sep = "\t")[,-1]
+# Calculate mapping statistics
+mappedreads <- as.integer(summary$Value[[which(summary$Name == "reads mapped:")]])
+unmappedreads <- as.integer(summary$Value[[which(summary$Name == "reads unmapped:")]])
+totalreads <- mappedreads + unmappedreads
+totalbases <- as.integer(summary$Value[[which(summary$Name == "total length:")]])
+mappedbases <- as.integer(summary$Value[[which(summary$Name == "bases mapped (cigar):")]])
+unmappedbases <- totalbases - mappedbases
+alignment <- rep(c("unmapped", "mapped"), 2)
+type <- c(rep("reads", 2), rep("bases", 2))
+value <- c(unmappedreads / totalreads, mappedreads / totalreads, unmappedbases / totalbases, mappedbases / totalbases)
+mappability <- data.frame(alignment, type, value)
+fraction_mapped_reads <- mappedreads / totalreads * 100
+# Import coverage file
+rawcov <- read.csv(as.character(snakemake@input[["coverage"]]), header = FALSE, sep = "\t")
+colnames(rawcov) = c("contig", "position", "depth")
+# Calculate coverage of each contig for different depths
+thresholds <- c(1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
+coverages <- data.frame(coverage.depth = thresholds)
+for (selectedcontig in unique(rawcov$contig)) {
+  temp <- c()
+  for (i in thresholds) {
+    totalpos <- nrow(subset(rawcov, contig == selectedcontig))
+    coveredpos <- nrow(subset(rawcov, contig == selectedcontig & depth >= i))
+    temp <- append(temp, round(coveredpos / totalpos * 100, 3))
+  }
+  coverages[selectedcontig] <- temp
+}
+# Calculate coverage depths across contigs
+depths <- data.frame(bin = c(1:1000))
+for (selectedcontig in unique(rawcov$contig)) {
+  df <- subset(rawcov, contig == selectedcontig)
+  df <- df %>% mutate(bin = ntile(position, n = 1000))
+  mean_df <- aggregate(depth ~ bin, data = df, FUN = mean)
+  names(mean_df)[2] <- selectedcontig
+  depths <- depths %>%
+    inner_join(mean_df, by = c("bin"))
+}
+# Import files with alignment end counts
+ends <- data.frame()
+infiles <- c(snakemake@input[["five_plus"]], snakemake@input[["five_minus"]],
+  snakemake@input[["three_plus"]], snakemake@input[["three_minus"]])
+strandinfo <- c("plus", "minus", "plus", "minus")
+endtypeinfo <- c("5'", "5'", "3'", "3'")
+for (infile in infiles) {
+  endcov <- read.csv(as.character(infile), header = FALSE, sep = "\t")
+  colnames(endcov) = c("contig", "position", "depth")
+  for (selectedcontig in unique(rawcov$contig)) {
+    df <- subset(endcov, contig == selectedcontig)
+    df <- df %>% mutate(bin = ntile(position, n = 1000))
+    sum_df <- aggregate(depth ~ bin, data = df, FUN = sum)
+    names(sum_df)[2] <- "ends"
+    sum_df$contig <- selectedcontig
+    sum_df$strand <- strandinfo[match(infile, infiles)]
+    sum_df$end.type <- endtypeinfo[match(infile, infiles)]
+    ends <- rbind(ends, sum_df)
+  }
+}
+```
+
+Filtered reads were aligned to the supplied reference genome (`r unique(rawcov$contig)`) using the aligner NGMLR. NGMLR was designed to reliably align reads for the discovery of diverse structural variants (see [here](https://doi.org/10.1038%2Fs41592-018-0001-7) and [here](https://github.com/philres/ngmlr)).
+NGMLR (v0.2.7) was run using the default parameters for nanopore reads:
+```
+ngmlr -x ont -r <REFERENCE> -q <FASTQ> -o <SAM>
+```
+The resulting SAM alignment file was consequently converted to a sorted and indexed BAM alignment file using samtools (v1.9).<br><br>
+In total, `r round(fraction_mapped_reads,1)`% of the reads could be mapped to the reference genome with a coverage of `r round(nrow(subset(rawcov, depth >= 1)) / nrow(rawcov) * 100, 3)`% and a mean coverage depth of `r round(mean(rawcov$depth), 1)`x.
+Further information is provided in the following tabs:<br>
+
+
+## Read mappability
+
+The fraction of reads and read bases successfully mapped to the reference genome is shown and should typically be higher than 90%.
+A lower fraction of mapped reads may hint at issues with the input DNA sample (e.g., contamination), library preparation (e.g., use of wrong barcode), or the used reference.
+
+```{r mappability.plot, echo=FALSE, warning=FALSE, out.width="75%", fig.align="center"}
+# Plotting
+mappability$alignment <- factor(mappability$alignment, levels = c("unmapped", "mapped"))
+mappability$type <- factor(mappability$type, levels = c("reads", "bases"))
+mapplot <- ggplot(mappability, aes(fill = alignment, y = value, x = type)) +
+  geom_bar(position = "fill", stat = "identity") +
+  labs(x = "type", y = "percentage", title = "Read mappability")
+mapplot
+```
+
+## Genome coverage
+
+The plot shows the fraction of covered bases for each contig of the reference genome in relation to the required minimal read depth.
+If a substantial fraction of a contig is covered only at a low read depth, this may interfere with the reliable identification of variants.
+
+```{r coverage.plot, echo=FALSE, warning=FALSE, out.width="75%", fig.align="center"}
+# Plotting
+cov4plotting <- coverages %>%
+  gather(key = "variable", value = "value", -coverage.depth)
+covplot <- ggplot(data = cov4plotting, aes(x = coverage.depth, y = value)) +
+  geom_line(aes(color = variable)) +
+  labs(x = "read depth", y = "% covered bases", title = "Genome coverage") +
+  scale_x_continuous(trans = "log10")
+covplot
+```
+
+## Coverage depth
+
+The contigs of the reference genome were split into 1,000 bins, and the mean coverage depth per bin was calculated.
+Outlier regions with lower or higher depth hint at the presence of structural variants.
+
+```{r depth.plot, echo=FALSE, warning=FALSE, out.width="75%", fig.align="center"}
+# Plotting
+depth4plotting <- depths %>%
+  gather(key = "contig", value = "value", -bin)
+depthplot <- ggplot(data = depth4plotting, aes(x = bin, y = value)) +
+  geom_line(aes(color = contig)) +
+  labs(x = "relative position in contig", y = "mean coverage depth", title = "Coverage depth")
+depthplot
+```
+
+## Alignment end distribution
+
+Similar to the coverage depth, the contigs of the reference genome were split into 1,000 bins, and the alignment ends per bin were summed up for each strand (positive and negative) and read end (5' and 3' end).
+Outliers again hint at the presence of structural variants.
+
+```{r ends.plot, echo=FALSE, warning=FALSE, out.width="100%", fig.align="center"}
+# Plotting
+ends$strand <- factor(ends$strand, levels = c("plus", "minus"))
+ends$end.type <- factor(ends$end.type, levels = c("5'", "3'"))
+endplot <- ggplot(data = ends, aes(x = bin, y = ends)) +
+  geom_line(aes(color = contig)) +
+  facet_grid(rows = vars(end.type), cols = vars(strand)) +
+  labs(x = "relative position in contig", y = "total end count")
+endplot
+
+```
+
+***
+
+# Variant calling
+
+## Small nucleotide variants {.tabset}
+
+Single nucleotide variants and indels were identified using two different tools, Clair3 and Medaka.
+
+```{r functions_snvs, echo=FALSE}
+determine_snv_type <- function(x) {
+  ref <- x["ref.allele"]
+  alt <- x["alt.allele"]
+  if (nchar(ref) == nchar(alt)) {
+    type <- "SNV"
+  } else if (nchar(ref) > nchar(alt)) {
+    type <- "deletion"
+  } else if (nchar(ref) < nchar(alt)) {
+    type <- "insertion"
+  } else {
+    type <- "."
+  }
+  return(type)
+}
+create_gradient <- function(vector, color) {
+    colorsneeded <- length(vector) + 1
+    alphas <- seq(0, 1, length.out = colorsneeded)
+    rgb <- strsplit(color, ",")[[1]]
+    colors <- c()
+    for (i in alphas) {
+        rgba <- paste("rgba(", rgb[1], ",", rgb[2], ",", rgb[3], ",", i, ")", sep = "")
+        colors <- append(colors, rgba)
+    }
+    return(colors)
+}
+```
+
+### Clair3
+
+Clair3 is a deep learning-based variant caller (see [here](https://doi.org/10.1038/s43588-022-00387-x) and [here](https://github.com/HKU-BAL/Clair3)). Clair3 (v1.0.4) was run on the alignment files produced by NGMLR using standard parameters:
+```
+run_clair3.sh --bam_fn <BAM> --ref_fn <REFERENCE> --include_all_ctgs --haploid_sensitive
+--platform ont --model_path <BASECALLINGMODEL> --output <OUTPUTDIRECTORY>
+```
+
+Predicted SNVs and indels are listed below with information on:
+
+* contig (i.e., the chromosome)
+* position of the variant in the contig
+* variant type (SNV, insertion or deletion)
+* reference allele
+* alternative variant allele
+* quality of the variant (the higher the better, minimum quality of 2)
+* read depth at the position (should be higher than 10)
+* allele frequency (fraction of reads supporting the alternative allele, should be > 80%)
+
+\
+
+```{r clair3, echo=FALSE}
+# Functions for re-formatting variant information from Clair3 VCF file
+get_info_for_clair3 <- function(x, type) {
+  keys <- unlist(strsplit(x["format"], ":"))
+  values <- unlist(strsplit(x["sample"], ":"))
+  df <- data.frame(values, row.names = keys)
+  if (type == "read.depth") {
+    return(as.integer(df["DP",1]))
+  }
+  if (type == "allele.frequency") {
+    return(round(100 * as.double(df["AF",1]), 1))
+  }
+}
+# Import of Clair3 VCF file
+clair <- read.table(as.character(snakemake@input[["clair3"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"))
+clair$quality <- as.numeric(as.character(clair$quality))
+clair$read.depth <- apply(clair, 1, get_info_for_clair3, type = "read.depth")
+clair$allele.frequency <- apply(clair, 1, get_info_for_clair3, type = "allele.frequency")
+clair$ID <- clair$filter <- clair$info <- clair$format <- clair$sample <- NULL
+clair$type <- apply(clair, 1, determine_snv_type)
+clair <- clair[,c(1,2,8,3,4,5,6,7)]
+# Create output table
+DT::datatable(
+  clair,
+  colnames = c("ID", "contig", "position", "type", "reference allele", "variant allele", "quality", "read depth", "variant allele frequency (%)"),
+  filter = "top",
+  options = 
+    list(
+      pageLength = 50,
+      searchCols = list(NULL, NULL, NULL, NULL, NULL, NULL, list(search = '5 ... '), list(search = '10 ... '), NULL)
+    )
+) %>%
+formatStyle(
+  "quality",
+  backgroundColor = styleInterval(c(2:20), create_gradient(c(2:20), "0,255,0"))
+) %>%
+formatStyle(
+  "read.depth",
+  backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
+) %>%
+formatStyle(
+  "allele.frequency",
+  backgroundColor = styleInterval(80, create_gradient(c(80), "0,255,0"))
+)
+```
+
+### Medaka
+
+Medaka is a neural network-based variant caller developed by Oxford Nanopore Technologies (see [here](https://github.com/nanoporetech/medaka)).
+Medaka does not use an alignment file as input but rather performs the alignment to the reference genome under the hood using minimap2.
+Medaka (v1.11.3) was run using the following settings:
+
+```
+medaka_haploid_variant -m <BASECALLINGMODEL> -o <OUTPUTDIRECTORY>
+-i <FASTQ> -r <REFERENCE>
+```
+
+Predicted SNVs and indels are listed below with information on:
+
+* contig (i.e., the chromosome)
+* position of the variant in the contig
+* variant type (SNV, insertion or deletion)
+* reference allele
+* alternative variant allele
+* quality of the variant (the higher the better)
+* read depth at the position (should be higher than 10)
+* log2 ratio of the read depth per strand (should be between -0.5 and 0.5)
+
+
+```{r medaka, echo=FALSE}
+# Functions for re-formatting variant information from Medaka VCF file
+get_read_depth_for_medaka <- function(x) {
+  temp <- unlist(strsplit(x["info"], ";"))
+  for (i in temp) {
+    if (startsWith(i, "DP=")) {
+      reads <- as.integer(strsplit(i, "=")[[1]][2])
+    }
+  }
+  return(reads)
+}
+get_log2_strand_depth_for_medaka <- function(x) {
+  temp <- unlist(strsplit(x["info"], ";"))
+  for (i in temp) {
+    if (startsWith(i, "DPS=")) {
+      counts <- unlist(strsplit(strsplit(i, "=")[[1]][2], ","))
+      ratio <- log2(((as.integer(counts[1]) + 1) / (as.integer(counts[2]) + 1)))
+    }
+  }
+  return(round(ratio, 3))
+}
+# Import of Medaka VCF file
+medaka <- read.table(as.character(snakemake@input[["medaka"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"))
+medaka$quality <- as.numeric(as.character(medaka$quality))
+medaka$read.depth <- apply(medaka, 1, get_read_depth_for_medaka)
+medaka$log2.depth.by.strand <- apply(medaka, 1, get_log2_strand_depth_for_medaka)
+medaka$ID <- medaka$filter <- medaka$info <- medaka$format <- medaka$sample <- NULL
+medaka$type <- apply(medaka, 1, determine_snv_type)
+medaka <- medaka[,c(1,2,8,3,4,5,6,7)]
+# Create output table
+DT::datatable(
+  medaka,
+  colnames = c("ID", "contig", "position", "type", "reference allele", "variant allele", "quality", "read depth", "log2 read strand ratio"),
+  filter = "top",
+  options = 
+    list(
+      pageLength = 50,
+      searchCols = list(NULL, NULL, NULL, NULL, NULL, NULL, list(search = '10 ... '), list(search = '10 ... '), NULL)
+    )
+) %>%
+formatStyle(
+  "quality",
+  backgroundColor = styleInterval(c(0:100), create_gradient(c(0:100), "0,255,0"))
+) %>%
+formatStyle(
+  "read.depth",
+  backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
+) %>%
+formatStyle(
+  "log2.depth.by.strand",
+  backgroundColor = styleInterval(c(-0.5,0.5), c("rgba(0,255,0,0.0)", "rgba(0,255,0,1)", "rgba(0,255,0,0.0)"))
+)
+```
+
+### Both tools {.active}
+
+The following variants were identified by both Clair3 and Medaka. Please note that the two tools use different approaches to calculate the quality score of SNVs.
+
+```{r commonsnvs, echo=FALSE}
+clairdf <- as.data.frame.matrix(clair) %>%
+  select(-c("allele.frequency")) %>%
+  rename("Clair3.quality" = "quality", "Clair3.read.depth" = "read.depth")
+medakadf <- as.data.frame.matrix(medaka) %>%
+  select(-c("log2.depth.by.strand")) %>%
+  rename("Medaka.quality" = "quality", "Medaka.read.depth" = "read.depth")
+commonsnvs <- clairdf %>%
+  inner_join(medakadf, by = c("contig", "position", "type", "ref.allele", "alt.allele"))
+DT::datatable(
+  commonsnvs,
+  colnames = c("ID", "contig", "position", "type", "reference allele", "variant allele", "Clair3 quality score", "Clair3 read depth", "Medaka quality score", "Medaka read depth"),
+  filter = "top"
+)
+```
+
+***
+
+## Structural variants {.tabset}
+
+Structural variants were identified using two different tools, cuteSV and Sniffles.
+Both tools typically tend to call duplications at the beginning / end of circular contigs (i.e., most bacterial chromosomes and plasmids).
+Consequently, duplications close to contig starts with a length equal or close to the contig length can be ignored.
+Please see the VCF specifications for further details on SV annotation ([link](https://samtools.github.io/hts-specs/VCFv4.3.pdf)).
+
+```{r echo=FALSE}
+determine_sv_type <- function(x) {
+  svtype <- strsplit(x["ID"], "[.]")[[1]][2]
+  conversion <- data.frame(
+    c("insertion", "deletion", "duplication", "inversion", "translocation (breakend)"),
+    row.names = c("INS", "DEL", "DUP", "INV", "BND"))
+  return(conversion[svtype,1])
+}
+get_sv_details <- function(x, what) {
+  identifier <- "."
+  if (what == "allele.frequency") {identifier <- "AF"}
+  else if (what == "coverages") {identifier <- "COVERAGE"}
+  if (identifier != ".") {
+    info <- strsplit(x["info"], ";")[[1]]
+    for (i in info) {
+      if (startsWith(i, identifier)) {
+        return(strsplit(i, "=")[[1]][2])
+      }
+    }
+    return(".")
+  } else {
+    if (what == "read.depth") {
+      sample <- data.frame(strsplit(x["sample"], ":")[[1]], row.names = strsplit(x["format"], ":")[[1]])
+      readcount <- as.integer(sample["DR", 1]) + as.integer(sample["DV", 1])
+      return(readcount)
+    } else if (what == "details") {
+      if (x["type"] == "translocation (breakend)") {
+        if (grepl("]", x["alternative"], fixed = TRUE)) {
+          temp <- strsplit(x["alternative"], "]")[[1]]
+          if (startsWith(x["alternative"], "]")) {
+            return(paste0("region to the left of ", temp[2], " fused before ", x["contig"], ":", x["position"]))
+          } else {
+            return(paste0("reverse complementary region to the left of ", temp[2], " fused after ", x["contig"], ":", x["position"]))
+          }
+        } else if (grepl("[", x["alternative"], fixed = TRUE)) {
+          temp <- strsplit(x["alternative"], "[", fixed = TRUE)[[1]]
+          if (startsWith(x["alternative"], "[")) {
+            return(paste0("reverse complementary region to the right of ", temp[2], " fused before ", x["contig"], ":", x["position"]))
+          } else {
+            return(paste0("region to the right of ", temp[2], " fused after ", x["contig"], ":", x["position"]))
+          }
+        } else {return("Error!")}
+      } else if (x["type"] == "deletion" || x["type"] == "insertion") {
+        info <- strsplit(x["info"], ";")[[1]]
+        for (i in info) {
+          if (startsWith(i, "SVLEN")) {svlength <- strsplit(i, "=")[[1]][2]}
+        }
+        return(paste0(x["type"], " of ", svlength, " bp after pos. ", x["position"], " in ", x["contig"]))
+      } else if (x["type"] == "duplication" || x["type"] == "inversion") {
+        info <- strsplit(x["info"], ";")[[1]]
+        for (i in info) {
+          if (startsWith(i, "SVLEN")) {svlength <- strsplit(i, "=")[[1]][2]}
+          else if (startsWith(i, "END")) {svend <- as.numeric(strsplit(i, "=")[[1]][2]) - 1}
+        }
+        return(paste0(x["type"], " of region from ", x["position"], " to ", as.character(svend), " in ", x["contig"], " (", svlength, " bp)"))
+      }
+    }
+  }
+}
+```
+
+### cuteSV
+
+cuteSV is a structural variant caller designed for long-read sequencing data (see [here](https://doi.org/10.1186/s13059-020-02107-y) and [here](https://github.com/tjiangHIT/cuteSV)).
+cuteSV (v2.0.3) was run on NGMLR-aligned reads using standard settings suggested for ONT data:
+
+```
+cuteSV `r paste(snakemake@config[["cutesv"]][["params"]])`
+--genotype <BAM> <REFERENCE> <VCFFILE> <VCFDIRECTORY>
+```
+
+Predicted SVs are listed below with information on:
+
+* contig (i.e., the chromosome)
+* position of the variant in the contig
+* variant type (insertion, deletion, duplication, inversion, translocation)
+* further details on the identified SV
+* quality of the variant (the higher the better)
+* variant allele frequency
+* high-quality read depth
+
+```{r cutesv, echo=FALSE, warning=FALSE}
+# Import cuteSV VCF file
+cutesv <- read.table(as.character(snakemake@input[["cutesv"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "reference", "alternative", "quality", "filter", "info", "format", "sample"))
+cutesv$position <- as.numeric(as.character(cutesv$position))
+cutesv$quality <- as.numeric(as.character(cutesv$quality))
+# Determine SV type
+cutesv$type <- apply(cutesv, 1, determine_sv_type)
+cutesv$ID <- cutesv$filter <- NULL
+# Get indel sequences
+indelsCuteSV <- list()
+for (row in 1:nrow(cutesv)) {
+  if (cutesv[row, "type"] == "insertion") {
+    seq <- cutesv[row, "alternative"]
+    header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
+    indelsCuteSV <- append(indelsCuteSV, c(header, seq))
+  } else if (cutesv[row, "type"] == "deletion") {
+    seq <- cutesv[row, "reference"]
+    header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
+    indelsCuteSV <- append(indelsCuteSV, c(header, seq))
+  }
+}
+# Extract SV details
+cutesv$allele.frequency <- apply(cutesv, 1, get_sv_details, what = "allele.frequency")
+cutesv$allele.frequency <- round(100 * (as.numeric(as.character(cutesv$allele.frequency))), 1)
+cutesv$read.depth <- apply(cutesv, 1, get_sv_details, what = "read.depth")
+cutesv$details <- apply(cutesv, 1, get_sv_details, what = "details")
+cutesv$info <- cutesv$format <- cutesv$sample <- NULL
+cutesv$reference <-cutesv$alternative <- NULL
+cutesv <- cutesv[,c(1,2,4,7,3,5,6)]
+# Prepare FASTA file with indel sequences for download
+indelCountCuteSV <- length(indelsCuteSV) / 2
+fastaCuteSV <- paste(sapply(indelsCuteSV, paste, collapse = "\n"), collapse = "\n")
+encodedCuteSV <- base64enc::base64encode(charToRaw(fastaCuteSV))
+fileCuteSV <- paste0(snakemake@wildcards[["sample"]], "_indels_CuteSV.fa")
+```
+
+Insertion and deletion sequences found by CuteSV can be downloaded <a download="`r fileCuteSV`" href="data:application/octet-stream;base64,`r encodedCuteSV`">here</a> (`r indelCountCuteSV` indel(s) found).
+
+```{r cutesv2table, echo = FALSE}
+# Create output table
+DT::datatable(
+  cutesv,
+  colnames = c("ID", "contig", "position", "type", "details", "quality", "variant allele frequency (%)", "read depth"),
+  filter = "top",
+  options = 
+    list(
+      pageLength = 50,
+      searchCols = list(NULL, NULL, NULL, NULL, NULL, list(search = '10 ... '), NULL, list(search = '10 ... '))
+    )
+) %>%
+formatStyle(
+  "quality",
+  backgroundColor = styleInterval(c(0:20), create_gradient(c(0:20), "0,255,0"))
+) %>%
+formatStyle(
+  "allele.frequency",
+  backgroundColor = styleInterval(c(0:100), create_gradient(c(0:100), "0,255,0"))
+) %>%
+formatStyle(
+  "read.depth",
+  backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
+)
+```
+
+### Sniffles
+
+Sniffles2 is a structural variant caller designed for long-read sequencing data aligned with the long-read ampper NGMLR (see [here](https://doi.org/10.1038/s41592-018-0001-7) for the original Sniffles / NGMLR publication,
+[here](https://doi.org/10.1101/2022.04.04.487055) for the Sniffles2 update, and [here](https://github.com/fritzsedlazeck/Sniffles) for more information).
+Sniffles (v2.2) was run using standard settings:
+
+```
+sniffles --input <BAM> --reference <REFERENCE> --vcf <VCF>
+```
+
+Predicted SVs are listed below with information on:
+
+* contig (i.e., the chromosome)
+* position of the variant in the contig
+* variant type (insertion, deletion, duplication, inversion, translocation)
+* further details on the identified SV
+* quality of the variant (mean mapping quality of supporting reads, should be higher than 10)
+* variant allele frequency
+* high-quality read depth
+* further coverage information (coverages near upstream, start, center, end, and downstream of SV)
+
+```{r sniffles, echo=FALSE, warning=FALSE}
+# Import Sniffles VCF file
+sniffles <- read.table(as.character(snakemake@input[["sniffles"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "reference", "alternative", "quality", "filter", "info", "format", "sample"))
+sniffles$position <- as.numeric(as.character(sniffles$position))
+sniffles$quality <- as.numeric(as.character(sniffles$quality))
+# Determine SV type
+sniffles$type <- apply(sniffles, 1, determine_sv_type)
+sniffles$ID <- sniffles$filter <- NULL
+# Get indel sequences
+indelsSniffles <- list()
+for (row in 1:nrow(sniffles)) {
+  if (sniffles[row, "type"] == "insertion") {
+    seq <- sniffles[row, "alternative"]
+    header <- paste0(">", paste(sniffles[row, "contig"], sniffles[row, "position"], sniffles[row, "type"], "Sniffles", sep = "_"))
+    indelsSniffles <- append(indelsSniffles, c(header, seq))
+  } else if (sniffles[row, "type"] == "deletion") {
+    seq <- sniffles[row, "reference"]
+    header <- paste0(">", paste(sniffles[row, "contig"], sniffles[row, "position"], sniffles[row, "type"], "Sniffles", sep = "_"))
+    indelsSniffles <- append(indelsSniffles, c(header, seq))
+  }
+}
+# Extract SV details
+sniffles$allele.frequency <- apply(sniffles, 1, get_sv_details, what = "allele.frequency")
+sniffles$allele.frequency <- round(100 * (as.numeric(as.character(sniffles$allele.frequency))), 1)
+sniffles$coverages <- apply(sniffles, 1, get_sv_details, what = "coverages")
+sniffles$read.depth <- apply(sniffles, 1, get_sv_details, what = "read.depth")
+sniffles$details <- apply(sniffles, 1, get_sv_details, what = "details")
+sniffles$info <- sniffles$format <- sniffles$sample <- NULL
+sniffles$reference <-sniffles$alternative <- NULL
+sniffles <- sniffles[,c(1,2,4,8,3,5,7,6)]
+# Prepare FASTA file with indel sequences for download
+indelCountSniffles <- length(indelsSniffles) / 2
+fastaSniffles <- paste(sapply(indelsSniffles, paste, collapse = "\n"), collapse = "\n")
+encodedSniffles <- base64enc::base64encode(charToRaw(fastaSniffles))
+fileSniffles <- paste0(snakemake@wildcards[["sample"]], "_indels_Sniffles.fa")
+```
+
+Insertion and deletion sequences found by Sniffles can be downloaded <a download="`r fileSniffles`" href="data:application/octet-stream;base64,`r encodedSniffles`">here</a> (`r indelCountSniffles` indel(s) found).
+
+```{r sniffles2table, echo = FALSE}
+# Create output table
+DT::datatable(
+  sniffles,
+  colnames = c("ID", "contig", "position", "type", "details", "quality", "variant allele frequency (%)", "read depth", "coverages"),
+  filter = "top",
+  options = 
+    list(
+      pageLength = 50,
+      searchCols = list(NULL, NULL, NULL, NULL, NULL, list(search = '10 ... '), NULL, list(search = '10 ... '), NULL)
+    )
+) %>%
+formatStyle(
+  "quality",
+  backgroundColor = styleInterval(c(0:60), create_gradient(c(0:60), "0,255,0"))
+) %>%
+formatStyle(
+  "allele.frequency",
+  backgroundColor = styleInterval(c(0:100), create_gradient(c(0:100), "0,255,0"))
+) %>%
+formatStyle(
+  "read.depth",
+  backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
+)
+```
+
+***
+
+## Visual inspection of variants
+
+Read alignments for all detected variants can be found in `r tail(strsplit(snakemake@input[["igv"]], "/")[[1]], n = 1)` with variant tracks from all used variant callers.
+<br>
+Results were visualized using igv-reports (see [here](https://github.com/igvteam/igv-reports)).
+
+***
+
+# Source
+<a download="report.Rmd" href="`r base64enc::dataURI(file = params$rmd, mime = 'text/rmd', encoding = 'base64')`">R Markdown source file (to produce this document)</a>

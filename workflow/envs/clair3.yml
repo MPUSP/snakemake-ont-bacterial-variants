@@ -1,0 +1,5 @@
+name: clair3
+channels:
+  - bioconda
+dependencies:
+  - clair3=1.0.5

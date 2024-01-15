@@ -1,5 +1,8 @@
 results/**
+data/**
 resources/**
 logs/**
 .snakemake
 .snakemake/**
+workflow/.snakemake
+workflow/.snakemake/**

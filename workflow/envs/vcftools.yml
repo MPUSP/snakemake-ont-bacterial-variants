@@ -1,0 +1,5 @@
+name: vcftools
+channels:
+  - bioconda
+dependencies:
+  - vcftools=0.1.16
