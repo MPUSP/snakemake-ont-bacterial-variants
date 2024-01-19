@@ -1,0 +1,42 @@
+# vim: syntax=python tabstop=4 expandtab
+# coding: utf-8
+
+### Directories
+indir: data
+outdir: results
+
+### Samples
+samples: samplesheet/samples.tsv
+libprepkit: SQK-NBD114.24
+basecalling_model: r1041_e82_400bps_sup_v4.3.0
+
+### Tool parameters
+filtlong:
+  params:
+    - "--min_length 500"
+    - "--min_mean_q 90"
+    - "--keep_percent 90"
+ngmlr:
+  threads: 20
+nanoplot:
+  threads: 5
+multiqc:
+  threads: 5
+medaka:
+  threads: 10
+clair3:
+  threads: 10
+  params:
+    - "--include_all_ctgs"
+    - "--haploid_sensitive"
+    - "--platform ont"
+sniffles2:
+  threads: 10
+cutesv:
+  threads: 10
+  params:
+    - "--max_cluster_bias_INS 100"
+    - "--diff_ratio_merging_INS 0.3"
+    - "--max_cluster_bias_DEL 100"
+    - "--diff_ratio_merging_DEL 0.3"
+    - "--genotype"

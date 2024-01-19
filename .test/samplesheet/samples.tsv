@@ -1,0 +1,2 @@
+sample	fastq	reference	annotation	masked_regions
+test	data/fastq/test.fastq.gz	data/reference/NC_002737.2.fa	data/annotation/NC_002737.2.gff3	data/masked_region/example.bed

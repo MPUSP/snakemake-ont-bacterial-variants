@@ -6,7 +6,7 @@ indir: data
 outdir: results
 
 ### Samples
-samples: config/samples.tsv
+samples: samplesheet/samples.tsv
 libprepkit: SQK-NBD114.24
 basecalling_model: r1041_e82_400bps_sup_v4.3.0
 

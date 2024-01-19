@@ -20,9 +20,9 @@ def list_reference_genomes():
             genomes[ident] = path
     return(genomes)
 
-def generate_results():
+def generate_results(wildcards):
     return([
-        os.path.join(outdir, "variant_reports/{sample}/{sample}_overview.html")
+        os.path.join(outdir, F"variant_reports/{sample}/{sample}_overview.html")
         for sample in SAMPLES
     ])
 
@@ -38,7 +38,7 @@ def get_reference(wildcards):
 def get_annotation(wildcards):
     return(SAMPLEINFO.loc[wildcards.sample, "annotation"])
 
-def download_model_for_clair3():
+def download_model_for_clair3(wildcards):
     path2model = {
         "r1041_e82_400bps_sup_v4.2.0": "https://cdn.oxfordnanoportal.com/software/analysis/models/clair3/r1041_e82_400bps_sup_v420.tar.gz",
         "r1041_e82_400bps_sup_v4.3.0": "https://cdn.oxfordnanoportal.com/software/analysis/models/clair3/r1041_e82_400bps_sup_v430.tar.gz"
