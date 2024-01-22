@@ -7,6 +7,7 @@ rule sniffles2:
         "--- SV calling using Sniffles2"
     input:
         bam = os.path.join(outdir, "mapping/{sample}.bam"),
+        bai = os.path.join(outdir, "mapping/{sample}.bam.bai"),
         reference = get_reference
     output:
         os.path.join(outdir, "SV/sniffles2/{sample}.vcf")
@@ -34,6 +35,7 @@ rule cutesv:
         "--- SV calling using cuteSV"
     input:
         bam = os.path.join(outdir, "mapping/{sample}.bam"),
+        bai = os.path.join(outdir, "mapping/{sample}.bam.bai"),
         reference = get_reference
     output:
         vcfdir = directory(os.path.join(outdir, "SV/cutesv/{sample}")),

@@ -60,7 +60,8 @@ rule igv_reports:
         cutesv = os.path.join(outdir, "variant_reports/{sample}/{sample}.cutesv.vcf"),
         sniffles = os.path.join(outdir, "variant_reports/{sample}/{sample}.sniffles2.vcf"),
         reference = get_reference,
-        bam = os.path.join(outdir, "mapping/{sample}.bam")
+        bam = os.path.join(outdir, "mapping/{sample}.bam"),
+        bai = os.path.join(outdir, "mapping/{sample}.bam.bai")
     output:
         os.path.join(outdir, "variant_reports/{sample}/{sample}_IGV.html")
     log:

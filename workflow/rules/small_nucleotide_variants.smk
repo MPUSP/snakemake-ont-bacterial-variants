@@ -67,6 +67,7 @@ rule snv_clair3:
         "--- SNV calling using Clair3"
     input:
         bam = os.path.join(outdir, "mapping/{sample}.bam"),
+        bai = os.path.join(outdir, "mapping/{sample}.bam.bai"),
         reference = get_reference,
         model = rules.models_clair3.output
     output:
