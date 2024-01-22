@@ -1,5 +1,6 @@
 name: igv-reports
 channels:
   - bioconda
+  - conda-forge
 dependencies:
   - igv-reports=1.10.0
