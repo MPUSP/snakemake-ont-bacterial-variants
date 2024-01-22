@@ -90,7 +90,8 @@ rule multiqc:
     input:
         expand(rules.nanoplot_rawfastq.output.stats, sample = SAMPLES),
         expand(rules.nanoplot_filteredfastq.output.stats, sample = SAMPLES),
-        expand(rules.nanoplot_aligned.output.stats, sample = SAMPLES)
+        expand(rules.nanoplot_aligned.output.stats, sample = SAMPLES),
+        qcdir = os.path.join(outdir, "qc")
     output:
         outdir = directory(os.path.join(outdir, "qc/multiqc")),
         report = os.path.join(outdir, "qc/multiqc/multiqc_report.html"),
@@ -107,5 +108,5 @@ rule multiqc:
             "--dirs "
             "--dirs-depth 2 "
             "--outdir {output.outdir} "
-            "{outdir}/qc && "
+            "{input.qcdir} && "
         "cp {output.report} {output.final}"

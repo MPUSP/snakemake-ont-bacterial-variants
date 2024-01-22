@@ -31,8 +31,8 @@ rule mapping:
     message:
         "--- Mapping against reference genome"
     input:
-        os.path.join(outdir, "filtered_reads/{sample}.fastq.gz"),
-        get_reference
+        reads = os.path.join(outdir, "filtered_reads/{sample}.fastq.gz"),
+        reference = get_reference
     output:
         sam = temp(os.path.join(outdir, "mapping/{sample}.sam")),
         bam = os.path.join(outdir, "mapping/{sample}.bam"),
@@ -51,8 +51,8 @@ rule mapping:
         "ngmlr "
             "-t {threads} "
             "-x ont "
-            "-r {input[1]} "
-            "-q {input[0]} "
+            "-r {input.reference} "
+            "-q {input.reads} "
             "-o {output.sam} && "
         "samtools sort "
             "{output.sam} "
@@ -75,13 +75,16 @@ rule genomecoverage:
         os.path.join(outdir, "mapping/{sample}.bam")
     output:
         temp(os.path.join(outdir, "mapping/{sample}.coverage"))
+    log:
+        os.path.join(outdir, "mapping/logs/{sample}.genomecoverage.log")
     conda:
         "../envs/ngmlr.yml"
     shell:
         "bedtools genomecov "
             "-d "
             "-ibam {input} "
-            "> {output}"
+            "> {output} "
+            "2> {log}"
 
 # --------------------------------------------------------------------------- #
 # Alignment ends                                                              #
@@ -97,11 +100,17 @@ rule alignmentends:
         five_minus = temp(os.path.join(outdir, "mapping/{sample}.5ends.minus.counts")),
         three_plus = temp(os.path.join(outdir, "mapping/{sample}.3ends.plus.counts")),
         three_minus = temp(os.path.join(outdir, "mapping/{sample}.3ends.minus.counts"))
+    log:
+        os.path.join(outdir, "mapping/logs/{sample}.alignmentends.log")
     conda:
         "../envs/ngmlr.yml"
     shell:
-        "bedtools genomecov -d -ibam {input} -5 -strand + > {output.five_plus} && "
-        "bedtools genomecov -d -ibam {input} -5 -strand - > {output.five_minus} && "
-        "bedtools genomecov -d -ibam {input} -3 -strand + > {output.three_plus} && "
-        "bedtools genomecov -d -ibam {input} -3 -strand - > {output.three_minus}"
+        "bedtools genomecov -d -ibam {input} "
+            "-5 -strand + > {output.five_plus} 2> {log} && "
+        "bedtools genomecov -d -ibam {input} "
+            "-5 -strand - > {output.five_minus} 2>> {log} && "
+        "bedtools genomecov -d -ibam {input} "
+            "-3 -strand + > {output.three_plus} 2>> {log} && "
+        "bedtools genomecov -d -ibam {input} "
+            "-3 -strand - > {output.three_minus} 2>> {log}"
 

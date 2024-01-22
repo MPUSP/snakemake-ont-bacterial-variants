@@ -15,7 +15,7 @@ def list_reference_genomes():
     paths = SAMPLEINFO["reference"].unique()
     genomes = {}
     for path in paths:
-        ident = ".".join(path.split("/")[-1].split(".")[:-1])
+        ident = ".".join(path.split('/')[-1].split(".")[:-1])
         if not ident in genomes.keys():
             genomes[ident] = path
     return(genomes)
@@ -45,7 +45,7 @@ def download_model_for_clair3(wildcards):
     }
     return(
         path2model[config["basecalling_model"]],
-        path2model[config["basecalling_model"]].split("/")[-1].split(".tar.gz")[0])
+        path2model[config["basecalling_model"]].split('/')[-1].split(".tar.gz")[0])
 
 def get_medaka_model(wildcards):
     modeldetails = config["basecalling_model"].split("_")

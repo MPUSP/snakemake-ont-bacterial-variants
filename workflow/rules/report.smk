@@ -15,9 +15,11 @@ rule collect_vcfs:
         clair3 = os.path.join(outdir, "variant_reports/{sample}/{sample}.clair3.vcf"),
         cutesv = os.path.join(outdir, "variant_reports/{sample}/{sample}.cutesv.vcf"),
         sniffles2 = os.path.join(outdir, "variant_reports/{sample}/{sample}.sniffles2.vcf")
+    log:
+        os.path.join(outdir, "variant_reports/logs/{sample}.collect_vcfs.log")
     run:
         for i in range(len(input)):
-            shell(F"cp {input[i]} {output[i]}")
+            shell(F"cp {input[i]} {output[i]} 2>> {log}")
 
 # --------------------------------------------------------------------------- #
 # Prepare VCF files for use with IGV                                          #
@@ -33,8 +35,12 @@ rule prepare_vcfs:
         sniffles = os.path.join(outdir, "variant_reports/{sample}/{sample}.sniffles2.vcf")
     output:
         temp(os.path.join(outdir, "variant_reports/{sample}/all_variants.txt"))
+    log:
+        os.path.join(outdir, "variant_reports/logs/{sample}.prepare_vcfs.log")
+    conda:
+        "../envs/basic.yml"
     script:
-        "../scripts/merge_vcfs.py"
+        "../scripts/merge_vcfs.py > {log}"
 
 # --------------------------------------------------------------------------- #
 # Generate IGV report                                                         #
@@ -53,6 +59,8 @@ rule igv_reports:
         bam = os.path.join(outdir, "mapping/{sample}.bam")
     output:
         os.path.join(outdir, "variant_reports/{sample}/{sample}_IGV.html")
+    log:
+        os.path.join(outdir, "variant_reports/logs/{sample}.igv_reports.log")
     params:
         gff = get_annotation
     conda:
@@ -67,7 +75,8 @@ rule igv_reports:
             "--tracks {params.gff} {input.bam} {input.medaka} {input.clair} {input.cutesv} {input.sniffles} "
             "--flanking 1000 "
             "--info-columns 'contig' 'variant region start' 'variant region end' 'variant details' "
-            "--output {output}"
+            "--output {output} "
+            "> {log}"
 
 # --------------------------------------------------------------------------- #
 # Generate report                                                             #
@@ -93,9 +102,11 @@ rule report:
         multiqc = os.path.join(outdir, "variant_reports/MultiQC.html")
     output:
         os.path.join(outdir, "variant_reports/{sample}/{sample}_overview.html")
+    log:
+        os.path.join(outdir, "variant_reports/logs/{sample}.report.log")
     params:
         directory(os.path.join(outdir, "variant_reports"))
     conda:
         "../envs/report.yml"
     script:
-        "../scripts/report.Rmd"
+        "../scripts/report.Rmd > {log}"

@@ -72,7 +72,7 @@ rule filter_svs_by_regions:
         os.path.join(outdir, "SV/{tool}/{sample}.filtered.vcf")
     params:
         bed = get_bed_file_for_filtering,
-        prefix = os.path.join(outdir, "SV/{tool}/{sample}")
+        prefix = os.path.splitext(str(input))[0]
     log:
         os.path.join(outdir, "SV/{tool}/logs/{sample}.filtering.log")
     conda:
