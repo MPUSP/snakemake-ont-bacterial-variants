@@ -1,5 +1,6 @@
 name: medaka
 channels:
   - bioconda
+  - conda-forge
 dependencies:
   - medaka=1.11.3

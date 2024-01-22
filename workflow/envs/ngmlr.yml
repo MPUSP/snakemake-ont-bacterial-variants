@@ -1,6 +1,7 @@
 name: ngmlr
 channels:
   - bioconda
+  - conda-forge
 dependencies:
   - ngmlr=0.2.7
   - samtools=1.9
