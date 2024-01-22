@@ -1,5 +1,7 @@
 name: multiqc
 channels:
   - bioconda
+  - conda-forge
 dependencies:
   - multiqc=1.19
+  - rich-click=1.6.1
