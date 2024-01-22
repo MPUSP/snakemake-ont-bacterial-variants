@@ -17,9 +17,13 @@ rule collect_vcfs:
         sniffles2 = os.path.join(outdir, "variant_reports/{sample}/{sample}.sniffles2.vcf")
     log:
         os.path.join(outdir, "variant_reports/logs/{sample}.collect_vcfs.log")
-    run:
-        for i in range(len(input)):
-            shell(F"cp {input[i]} {output[i]} 2>> {log}")
+    conda:
+        "../envs/basic.yml"
+    shell:
+        "cp {input.medaka} {output.medaka} > {log} && "
+        "cp {input.clair3} {output.clair3} >> {log} && "
+        "cp {input.cutesv} {output.cutesv} >> {log} && "
+        "cp {input.sniffles2} {output.sniffles2} >> {log}"
 
 # --------------------------------------------------------------------------- #
 # Prepare VCF files for use with IGV                                          #
@@ -40,7 +44,7 @@ rule prepare_vcfs:
     conda:
         "../envs/basic.yml"
     script:
-        "../scripts/merge_vcfs.py > {log}"
+        "../scripts/merge_vcfs.py"
 
 # --------------------------------------------------------------------------- #
 # Generate IGV report                                                         #
@@ -109,4 +113,4 @@ rule report:
     conda:
         "../envs/report.yml"
     script:
-        "../scripts/report.Rmd > {log}"
+        "../scripts/report.Rmd"

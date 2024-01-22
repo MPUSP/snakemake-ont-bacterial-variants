@@ -16,6 +16,10 @@ output:
     collapsed: no
     smooth_scroll: yes
 ---
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+log <- file(snakemake@log[[1]], open="wt")
+sink(log)
+```
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE}
 library(tidyverse)
@@ -54,7 +58,7 @@ title: "Variant calling report: `r sample`"
 # Read quality control {.tabset}
 
 Libraries were prepared using the `r libprepkit` kit, and sequencing was performed on a `r poretype` flow cell. Reads were basecalled using the `r accuracy` basecalling model. <br><br>
-Reads were filtered using Filtlong (see [here](https://github.com/rrwick/Filtlong)) to enrich for long high-quality reads:
+Reads were filtered using Filtlong (see [here](https://github.com/rrwick/Filtlong), v0.2.1) to enrich for long high-quality reads:
 ```
 filtlong `r paste(snakemake@config[["filtlong"]][["params"]])` <RAWFASTQ>
 ```
@@ -311,7 +315,7 @@ create_gradient <- function(vector, color) {
 
 ### Clair3
 
-Clair3 is a deep learning-based variant caller (see [here](https://doi.org/10.1038/s43588-022-00387-x) and [here](https://github.com/HKU-BAL/Clair3)). Clair3 (v1.0.4) was run on the alignment files produced by NGMLR using standard parameters:
+Clair3 is a deep learning-based variant caller (see [here](https://doi.org/10.1038/s43588-022-00387-x) and [here](https://github.com/HKU-BAL/Clair3)). Clair3 (v1.0.5) was run on the alignment files produced by NGMLR using standard parameters:
 ```
 run_clair3.sh --bam_fn <BAM> --ref_fn <REFERENCE> --include_all_ctgs --haploid_sensitive
 --platform ont --model_path <BASECALLINGMODEL> --output <OUTPUTDIRECTORY>
@@ -330,7 +334,7 @@ Predicted SNVs and indels are listed below with information on:
 
 \
 
-```{r clair3, echo=FALSE}
+```{r clair3, echo=FALSE, results = 'asis'}
 # Functions for re-formatting variant information from Clair3 VCF file
 get_info_for_clair3 <- function(x, type) {
   keys <- unlist(strsplit(x["format"], ":"))
@@ -345,35 +349,39 @@ get_info_for_clair3 <- function(x, type) {
 }
 # Import of Clair3 VCF file
 clair <- read.table(as.character(snakemake@input[["clair3"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"))
-clair$quality <- as.numeric(as.character(clair$quality))
-clair$read.depth <- apply(clair, 1, get_info_for_clair3, type = "read.depth")
-clair$allele.frequency <- apply(clair, 1, get_info_for_clair3, type = "allele.frequency")
-clair$ID <- clair$filter <- clair$info <- clair$format <- clair$sample <- NULL
-clair$type <- apply(clair, 1, determine_snv_type)
-clair <- clair[,c(1,2,8,3,4,5,6,7)]
-# Create output table
-DT::datatable(
-  clair,
-  colnames = c("ID", "contig", "position", "type", "reference allele", "variant allele", "quality", "read depth", "variant allele frequency (%)"),
-  filter = "top",
-  options = 
-    list(
-      pageLength = 50,
-      searchCols = list(NULL, NULL, NULL, NULL, NULL, NULL, list(search = '5 ... '), list(search = '10 ... '), NULL)
-    )
-) %>%
-formatStyle(
-  "quality",
-  backgroundColor = styleInterval(c(2:20), create_gradient(c(2:20), "0,255,0"))
-) %>%
-formatStyle(
-  "read.depth",
-  backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
-) %>%
-formatStyle(
-  "allele.frequency",
-  backgroundColor = styleInterval(80, create_gradient(c(80), "0,255,0"))
-)
+if (nrow(clair) > 0) {
+  clair$quality <- as.numeric(as.character(clair$quality))
+  clair$read.depth <- apply(clair, 1, get_info_for_clair3, type = "read.depth")
+  clair$allele.frequency <- apply(clair, 1, get_info_for_clair3, type = "allele.frequency")
+  clair$ID <- clair$filter <- clair$info <- clair$format <- clair$sample <- NULL
+  clair$type <- apply(clair, 1, determine_snv_type)
+  clair <- clair[,c(1,2,8,3,4,5,6,7)]
+  # Create output table
+  DT::datatable(
+    clair,
+    colnames = c("ID", "contig", "position", "type", "reference allele", "variant allele", "quality", "read depth", "variant allele frequency (%)"),
+    filter = "top",
+    options = 
+      list(
+        pageLength = 50,
+        searchCols = list(NULL, NULL, NULL, NULL, NULL, NULL, list(search = '5 ... '), list(search = '10 ... '), NULL)
+      )
+  ) %>%
+  formatStyle(
+    "quality",
+    backgroundColor = styleInterval(c(2:20), create_gradient(c(2:20), "0,255,0"))
+  ) %>%
+  formatStyle(
+    "read.depth",
+    backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
+  ) %>%
+  formatStyle(
+    "allele.frequency",
+    backgroundColor = styleInterval(80, create_gradient(c(80), "0,255,0"))
+  )
+} else {
+  cat("No variants detected by Clair3")
+}
 ```
 
 ### Medaka
@@ -399,7 +407,7 @@ Predicted SNVs and indels are listed below with information on:
 * log2 ratio of the read depth per strand (should be between -0.5 and 0.5)
 
 
-```{r medaka, echo=FALSE}
+```{r medaka, echo=FALSE, results = 'asis'}
 # Functions for re-formatting variant information from Medaka VCF file
 get_read_depth_for_medaka <- function(x) {
   temp <- unlist(strsplit(x["info"], ";"))
@@ -422,35 +430,39 @@ get_log2_strand_depth_for_medaka <- function(x) {
 }
 # Import of Medaka VCF file
 medaka <- read.table(as.character(snakemake@input[["medaka"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"))
-medaka$quality <- as.numeric(as.character(medaka$quality))
-medaka$read.depth <- apply(medaka, 1, get_read_depth_for_medaka)
-medaka$log2.depth.by.strand <- apply(medaka, 1, get_log2_strand_depth_for_medaka)
-medaka$ID <- medaka$filter <- medaka$info <- medaka$format <- medaka$sample <- NULL
-medaka$type <- apply(medaka, 1, determine_snv_type)
-medaka <- medaka[,c(1,2,8,3,4,5,6,7)]
-# Create output table
-DT::datatable(
-  medaka,
-  colnames = c("ID", "contig", "position", "type", "reference allele", "variant allele", "quality", "read depth", "log2 read strand ratio"),
-  filter = "top",
-  options = 
-    list(
-      pageLength = 50,
-      searchCols = list(NULL, NULL, NULL, NULL, NULL, NULL, list(search = '10 ... '), list(search = '10 ... '), NULL)
-    )
-) %>%
-formatStyle(
-  "quality",
-  backgroundColor = styleInterval(c(0:100), create_gradient(c(0:100), "0,255,0"))
-) %>%
-formatStyle(
-  "read.depth",
-  backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
-) %>%
-formatStyle(
-  "log2.depth.by.strand",
-  backgroundColor = styleInterval(c(-0.5,0.5), c("rgba(0,255,0,0.0)", "rgba(0,255,0,1)", "rgba(0,255,0,0.0)"))
-)
+if (nrow(medaka) > 0) {
+  medaka$quality <- as.numeric(as.character(medaka$quality))
+  medaka$read.depth <- apply(medaka, 1, get_read_depth_for_medaka)
+  medaka$log2.depth.by.strand <- apply(medaka, 1, get_log2_strand_depth_for_medaka)
+  medaka$ID <- medaka$filter <- medaka$info <- medaka$format <- medaka$sample <- NULL
+  medaka$type <- apply(medaka, 1, determine_snv_type)
+  medaka <- medaka[,c(1,2,8,3,4,5,6,7)]
+  # Create output table
+  DT::datatable(
+    medaka,
+    colnames = c("ID", "contig", "position", "type", "reference allele", "variant allele", "quality", "read depth", "log2 read strand ratio"),
+    filter = "top",
+    options = 
+      list(
+        pageLength = 50,
+        searchCols = list(NULL, NULL, NULL, NULL, NULL, NULL, list(search = '10 ... '), list(search = '10 ... '), NULL)
+      )
+  ) %>%
+  formatStyle(
+    "quality",
+    backgroundColor = styleInterval(c(0:100), create_gradient(c(0:100), "0,255,0"))
+  ) %>%
+  formatStyle(
+    "read.depth",
+    backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
+  ) %>%
+  formatStyle(
+    "log2.depth.by.strand",
+    backgroundColor = styleInterval(c(-0.5,0.5), c("rgba(0,255,0,0.0)", "rgba(0,255,0,1)", "rgba(0,255,0,0.0)"))
+  )
+} else {
+  cat("No variants detected by Medaka")
+}
 ```
 
 ### Both tools {.active}
@@ -546,7 +558,7 @@ get_sv_details <- function(x, what) {
 ### cuteSV
 
 cuteSV is a structural variant caller designed for long-read sequencing data (see [here](https://doi.org/10.1186/s13059-020-02107-y) and [here](https://github.com/tjiangHIT/cuteSV)).
-cuteSV (v2.0.3) was run on NGMLR-aligned reads using standard settings suggested for ONT data:
+cuteSV (v2.1.0) was run on NGMLR-aligned reads using standard settings suggested for ONT data:
 
 ```
 cuteSV `r paste(snakemake@config[["cutesv"]][["params"]])`
@@ -566,32 +578,36 @@ Predicted SVs are listed below with information on:
 ```{r cutesv, echo=FALSE, warning=FALSE}
 # Import cuteSV VCF file
 cutesv <- read.table(as.character(snakemake@input[["cutesv"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "reference", "alternative", "quality", "filter", "info", "format", "sample"))
-cutesv$position <- as.numeric(as.character(cutesv$position))
-cutesv$quality <- as.numeric(as.character(cutesv$quality))
-# Determine SV type
-cutesv$type <- apply(cutesv, 1, determine_sv_type)
-cutesv$ID <- cutesv$filter <- NULL
-# Get indel sequences
-indelsCuteSV <- list()
-for (row in 1:nrow(cutesv)) {
-  if (cutesv[row, "type"] == "insertion") {
-    seq <- cutesv[row, "alternative"]
-    header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
-    indelsCuteSV <- append(indelsCuteSV, c(header, seq))
-  } else if (cutesv[row, "type"] == "deletion") {
-    seq <- cutesv[row, "reference"]
-    header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
-    indelsCuteSV <- append(indelsCuteSV, c(header, seq))
+  if (nrow(cutesv) > 0) {
+  cutesv$position <- as.numeric(as.character(cutesv$position))
+  cutesv$quality <- as.numeric(as.character(cutesv$quality))
+  # Determine SV type
+  cutesv$type <- apply(cutesv, 1, determine_sv_type)
+  cutesv$ID <- cutesv$filter <- NULL
+  # Get indel sequences
+  indelsCuteSV <- list()
+  for (row in 1:nrow(cutesv)) {
+    if (cutesv[row, "type"] == "insertion") {
+      seq <- cutesv[row, "alternative"]
+      header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
+      indelsCuteSV <- append(indelsCuteSV, c(header, seq))
+    } else if (cutesv[row, "type"] == "deletion") {
+      seq <- cutesv[row, "reference"]
+      header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
+      indelsCuteSV <- append(indelsCuteSV, c(header, seq))
+    }
   }
+  # Extract SV details
+  cutesv$allele.frequency <- apply(cutesv, 1, get_sv_details, what = "allele.frequency")
+  cutesv$allele.frequency <- round(100 * (as.numeric(as.character(cutesv$allele.frequency))), 1)
+  cutesv$read.depth <- apply(cutesv, 1, get_sv_details, what = "read.depth")
+  cutesv$details <- apply(cutesv, 1, get_sv_details, what = "details")
+  cutesv$info <- cutesv$format <- cutesv$sample <- NULL
+  cutesv$reference <-cutesv$alternative <- NULL
+  cutesv <- cutesv[,c(1,2,4,7,3,5,6)]
+} else {
+  indelsCuteSV <- list()
 }
-# Extract SV details
-cutesv$allele.frequency <- apply(cutesv, 1, get_sv_details, what = "allele.frequency")
-cutesv$allele.frequency <- round(100 * (as.numeric(as.character(cutesv$allele.frequency))), 1)
-cutesv$read.depth <- apply(cutesv, 1, get_sv_details, what = "read.depth")
-cutesv$details <- apply(cutesv, 1, get_sv_details, what = "details")
-cutesv$info <- cutesv$format <- cutesv$sample <- NULL
-cutesv$reference <-cutesv$alternative <- NULL
-cutesv <- cutesv[,c(1,2,4,7,3,5,6)]
 # Prepare FASTA file with indel sequences for download
 indelCountCuteSV <- length(indelsCuteSV) / 2
 fastaCuteSV <- paste(sapply(indelsCuteSV, paste, collapse = "\n"), collapse = "\n")
@@ -601,36 +617,40 @@ fileCuteSV <- paste0(snakemake@wildcards[["sample"]], "_indels_CuteSV.fa")
 
 Insertion and deletion sequences found by CuteSV can be downloaded <a download="`r fileCuteSV`" href="data:application/octet-stream;base64,`r encodedCuteSV`">here</a> (`r indelCountCuteSV` indel(s) found).
 
-```{r cutesv2table, echo = FALSE}
-# Create output table
-DT::datatable(
-  cutesv,
-  colnames = c("ID", "contig", "position", "type", "details", "quality", "variant allele frequency (%)", "read depth"),
-  filter = "top",
-  options = 
-    list(
-      pageLength = 50,
-      searchCols = list(NULL, NULL, NULL, NULL, NULL, list(search = '10 ... '), NULL, list(search = '10 ... '))
-    )
-) %>%
-formatStyle(
-  "quality",
-  backgroundColor = styleInterval(c(0:20), create_gradient(c(0:20), "0,255,0"))
-) %>%
-formatStyle(
-  "allele.frequency",
-  backgroundColor = styleInterval(c(0:100), create_gradient(c(0:100), "0,255,0"))
-) %>%
-formatStyle(
-  "read.depth",
-  backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
-)
+```{r cutesv2table, echo = FALSE, results = 'asis'}
+if (nrow(cutesv) > 0) {
+  # Create output table
+  DT::datatable(
+    cutesv,
+    colnames = c("ID", "contig", "position", "type", "details", "quality", "variant allele frequency (%)", "read depth"),
+    filter = "top",
+    options = 
+      list(
+        pageLength = 50,
+        searchCols = list(NULL, NULL, NULL, NULL, NULL, list(search = '10 ... '), NULL, list(search = '10 ... '))
+      )
+  ) %>%
+  formatStyle(
+    "quality",
+    backgroundColor = styleInterval(c(0:20), create_gradient(c(0:20), "0,255,0"))
+  ) %>%
+  formatStyle(
+    "allele.frequency",
+    backgroundColor = styleInterval(c(0:100), create_gradient(c(0:100), "0,255,0"))
+  ) %>%
+  formatStyle(
+    "read.depth",
+    backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
+  )
+} else {
+  cat("No variants detected by cuteSV")
+}
 ```
 
 ### Sniffles
 
-Sniffles2 is a structural variant caller designed for long-read sequencing data aligned with the long-read ampper NGMLR (see [here](https://doi.org/10.1038/s41592-018-0001-7) for the original Sniffles / NGMLR publication,
-[here](https://doi.org/10.1101/2022.04.04.487055) for the Sniffles2 update, and [here](https://github.com/fritzsedlazeck/Sniffles) for more information).
+Sniffles2 is a structural variant caller designed for long-read sequencing data aligned with the long-read mapper NGMLR (see [here](https://doi.org/10.1038/s41592-018-0001-7) for the original Sniffles / NGMLR publication,
+[here](https://doi.org/10.1038/s41587-023-02024-y) for the Sniffles2 update, and [here](https://github.com/fritzsedlazeck/Sniffles) for more information).
 Sniffles (v2.2) was run using standard settings:
 
 ```
@@ -651,33 +671,37 @@ Predicted SVs are listed below with information on:
 ```{r sniffles, echo=FALSE, warning=FALSE}
 # Import Sniffles VCF file
 sniffles <- read.table(as.character(snakemake@input[["sniffles"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "reference", "alternative", "quality", "filter", "info", "format", "sample"))
-sniffles$position <- as.numeric(as.character(sniffles$position))
-sniffles$quality <- as.numeric(as.character(sniffles$quality))
-# Determine SV type
-sniffles$type <- apply(sniffles, 1, determine_sv_type)
-sniffles$ID <- sniffles$filter <- NULL
-# Get indel sequences
-indelsSniffles <- list()
-for (row in 1:nrow(sniffles)) {
-  if (sniffles[row, "type"] == "insertion") {
-    seq <- sniffles[row, "alternative"]
-    header <- paste0(">", paste(sniffles[row, "contig"], sniffles[row, "position"], sniffles[row, "type"], "Sniffles", sep = "_"))
-    indelsSniffles <- append(indelsSniffles, c(header, seq))
-  } else if (sniffles[row, "type"] == "deletion") {
-    seq <- sniffles[row, "reference"]
-    header <- paste0(">", paste(sniffles[row, "contig"], sniffles[row, "position"], sniffles[row, "type"], "Sniffles", sep = "_"))
-    indelsSniffles <- append(indelsSniffles, c(header, seq))
+if (nrow(sniffles) > 0) {
+  sniffles$position <- as.numeric(as.character(sniffles$position))
+  sniffles$quality <- as.numeric(as.character(sniffles$quality))
+  # Determine SV type
+  sniffles$type <- apply(sniffles, 1, determine_sv_type)
+  sniffles$ID <- sniffles$filter <- NULL
+  # Get indel sequences
+  indelsSniffles <- list()
+  for (row in 1:nrow(sniffles)) {
+    if (sniffles[row, "type"] == "insertion") {
+      seq <- sniffles[row, "alternative"]
+      header <- paste0(">", paste(sniffles[row, "contig"], sniffles[row, "position"], sniffles[row, "type"], "Sniffles", sep = "_"))
+      indelsSniffles <- append(indelsSniffles, c(header, seq))
+    } else if (sniffles[row, "type"] == "deletion") {
+      seq <- sniffles[row, "reference"]
+      header <- paste0(">", paste(sniffles[row, "contig"], sniffles[row, "position"], sniffles[row, "type"], "Sniffles", sep = "_"))
+      indelsSniffles <- append(indelsSniffles, c(header, seq))
+    }
   }
+  # Extract SV details
+  sniffles$allele.frequency <- apply(sniffles, 1, get_sv_details, what = "allele.frequency")
+  sniffles$allele.frequency <- round(100 * (as.numeric(as.character(sniffles$allele.frequency))), 1)
+  sniffles$coverages <- apply(sniffles, 1, get_sv_details, what = "coverages")
+  sniffles$read.depth <- apply(sniffles, 1, get_sv_details, what = "read.depth")
+  sniffles$details <- apply(sniffles, 1, get_sv_details, what = "details")
+  sniffles$info <- sniffles$format <- sniffles$sample <- NULL
+  sniffles$reference <-sniffles$alternative <- NULL
+  sniffles <- sniffles[,c(1,2,4,8,3,5,7,6)]
+} else {
+  indelsSniffles <- list()
 }
-# Extract SV details
-sniffles$allele.frequency <- apply(sniffles, 1, get_sv_details, what = "allele.frequency")
-sniffles$allele.frequency <- round(100 * (as.numeric(as.character(sniffles$allele.frequency))), 1)
-sniffles$coverages <- apply(sniffles, 1, get_sv_details, what = "coverages")
-sniffles$read.depth <- apply(sniffles, 1, get_sv_details, what = "read.depth")
-sniffles$details <- apply(sniffles, 1, get_sv_details, what = "details")
-sniffles$info <- sniffles$format <- sniffles$sample <- NULL
-sniffles$reference <-sniffles$alternative <- NULL
-sniffles <- sniffles[,c(1,2,4,8,3,5,7,6)]
 # Prepare FASTA file with indel sequences for download
 indelCountSniffles <- length(indelsSniffles) / 2
 fastaSniffles <- paste(sapply(indelsSniffles, paste, collapse = "\n"), collapse = "\n")
@@ -687,30 +711,34 @@ fileSniffles <- paste0(snakemake@wildcards[["sample"]], "_indels_Sniffles.fa")
 
 Insertion and deletion sequences found by Sniffles can be downloaded <a download="`r fileSniffles`" href="data:application/octet-stream;base64,`r encodedSniffles`">here</a> (`r indelCountSniffles` indel(s) found).
 
-```{r sniffles2table, echo = FALSE}
-# Create output table
-DT::datatable(
-  sniffles,
-  colnames = c("ID", "contig", "position", "type", "details", "quality", "variant allele frequency (%)", "read depth", "coverages"),
-  filter = "top",
-  options = 
-    list(
-      pageLength = 50,
-      searchCols = list(NULL, NULL, NULL, NULL, NULL, list(search = '10 ... '), NULL, list(search = '10 ... '), NULL)
-    )
-) %>%
-formatStyle(
-  "quality",
-  backgroundColor = styleInterval(c(0:60), create_gradient(c(0:60), "0,255,0"))
-) %>%
-formatStyle(
-  "allele.frequency",
-  backgroundColor = styleInterval(c(0:100), create_gradient(c(0:100), "0,255,0"))
-) %>%
-formatStyle(
-  "read.depth",
-  backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
-)
+```{r sniffles2table, echo = FALSE, results = 'asis'}
+if (nrow(sniffles) > 0) {
+  # Create output table
+  DT::datatable(
+    sniffles,
+    colnames = c("ID", "contig", "position", "type", "details", "quality", "variant allele frequency (%)", "read depth", "coverages"),
+    filter = "top",
+    options = 
+      list(
+        pageLength = 50,
+        searchCols = list(NULL, NULL, NULL, NULL, NULL, list(search = '10 ... '), NULL, list(search = '10 ... '), NULL)
+      )
+  ) %>%
+  formatStyle(
+    "quality",
+    backgroundColor = styleInterval(c(0:60), create_gradient(c(0:60), "0,255,0"))
+  ) %>%
+  formatStyle(
+    "allele.frequency",
+    backgroundColor = styleInterval(c(0:100), create_gradient(c(0:100), "0,255,0"))
+  ) %>%
+  formatStyle(
+    "read.depth",
+    backgroundColor = styleInterval(10, create_gradient(c(10), "0,255,0"))
+  )
+} else {
+  cat("No variants detected by Sniffles2")
+}
 ```
 
 ***

@@ -16,7 +16,6 @@ rule filtlong:
     conda:
         "../envs/filtlong.yml"
     shell:
-        "echo {params} && "
         "filtlong "
             "{params.default} "
             "{input} "
@@ -39,7 +38,7 @@ rule mapping:
         bai = os.path.join(outdir, "mapping/{sample}.bam.bai"),
         stats = temp(os.path.join(outdir, "mapping/{sample}.stats"))
     log:
-        minimap2 = os.path.join(outdir, "mapping/logs/{sample}.minimap2.log"),
+        ngmlr = os.path.join(outdir, "mapping/logs/{sample}.ngmlr.log"),
         samtools = os.path.join(outdir, "mapping/logs/{sample}.samtools.log")
     params:
         tmpdir = os.path.join(outdir, "mapping/{sample}")
@@ -53,7 +52,8 @@ rule mapping:
             "-x ont "
             "-r {input.reference} "
             "-q {input.reads} "
-            "-o {output.sam} && "
+            "-o {output.sam} "
+            "2> {log.ngmlr} && "
         "samtools sort "
             "{output.sam} "
             "-@ {threads} "
@@ -61,8 +61,8 @@ rule mapping:
             "-O bam "
             "> {output.bam} "
             "2> {log.samtools} && "
-        "samtools index {output.bam} && "
-        "samtools stats {output.bam} > {output.stats}"
+        "samtools index {output.bam} 2>> {log.samtools} && "
+        "samtools stats {output.bam} > {output.stats} 2>> {log.samtools}"
 
 # --------------------------------------------------------------------------- #
 # Genome coverage                                                             #

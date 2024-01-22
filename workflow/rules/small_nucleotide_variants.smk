@@ -107,7 +107,7 @@ rule filter_snvs_by_regions:
         os.path.join(outdir, "SNV/{tool}/{sample}.filtered.vcf")
     params:
         bed = get_bed_file_for_filtering,
-        prefix = os.path.splitext(str(input))[0]
+        prefix = lambda x, input: os.path.splitext(str(input))[0]
     log:
         os.path.join(outdir, "SNV/{tool}/logs/{sample}.filtering.log")
     conda:
@@ -119,9 +119,9 @@ rule filter_snvs_by_regions:
                 "--vcf {input} "
                 "--recode "
                 "--keep-INFO-all "
-                "--out {params.prefix} && "
-            "mv {params.prefix}.recode.vcf {output} && "
-            "mv {params.prefix}.log {log}; "
+                "--out {params.prefix} "
+                "2> {log} && "
+            "mv {params.prefix}.recode.vcf {output}; "
         "else "
             "cp {input} {output} && "
             "echo 'No BED file for filtering provided' > {log}; "

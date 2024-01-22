@@ -50,7 +50,7 @@ for index, row in df.iterrows():
         if len(row["ALT"]) > len(row["REF"]): vartype = "insertion"
         elif len(row["ALT"]) < len(row["REF"]): vartype = "deletion"
         else: vartype = "SNV"
-    currentinfo = F"{vartype} at pos. {row["POS"]} in {row["CHROM"]} called by {row["TOOL"]}"
+    currentinfo = F"{vartype} at pos. {row['POS']} in {row['CHROM']} called by {row['TOOL']}"
     if initiate:
         entry = [currentcontig, currentposition, currentposition, currentinfo]
         previouscontig = currentcontig
@@ -60,8 +60,8 @@ for index, row in df.iterrows():
         currentcontig = row["CHROM"]
         currentposition = row["POS"]
         if (currentcontig == previouscontig) and (int(currentposition) - int(previousposition) <= 1000):
-                entry[2] = currentposition
-                entry[3] = entry[3] + "; " + currentinfo
+            entry[2] = currentposition
+            entry[3] = entry[3] + "; " + currentinfo
         else:
             regions.append(entry)
             entry = [currentcontig, currentposition, currentposition, currentinfo]
