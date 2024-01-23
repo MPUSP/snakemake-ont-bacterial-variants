@@ -8,13 +8,14 @@ rule nanoplot_rawfastq:
     input:
         get_fastq
     output:
-        outdir = directory(os.path.join(outdir, "qc/raw_reads/{sample}")),
         stats = os.path.join(outdir, "qc/raw_reads/{sample}/NanoStats.txt"),
         raw = os.path.join(outdir, "qc/raw_reads/{sample}/NanoPlot-data.tsv.gz")
     log:
         os.path.join(outdir, "qc/raw_reads/logs/{sample}.log")
     threads:
         config["nanoplot"]["threads"]
+    params:
+        lambda x, output: os.path.dirname(str(output.stats))
     conda:
         "../envs/nanoplot.yml"
     shell:
@@ -22,7 +23,7 @@ rule nanoplot_rawfastq:
             "--threads {threads} "
             "--raw "
             "--fastq {input} "
-            "--outdir {output.outdir} "
+            "--outdir {params} "
             "> {log}"
 
 # --------------------------------------------------------------------------- #
@@ -35,13 +36,14 @@ rule nanoplot_filteredfastq:
     input:
         os.path.join(outdir, "filtered_reads/{sample}.fastq.gz")
     output:
-        outdir = directory(os.path.join(outdir, "qc/filtered_reads/{sample}")),
         stats = os.path.join(outdir, "qc/filtered_reads/{sample}/NanoStats.txt"),
         raw = os.path.join(outdir, "qc/filtered_reads/{sample}/NanoPlot-data.tsv.gz")
     log:
         os.path.join(outdir, "qc/filtered_reads/logs/{sample}.log")
     threads:
         config["nanoplot"]["threads"]
+    params:
+        lambda x, output: os.path.dirname(str(output.stats))
     conda:
         "../envs/nanoplot.yml"
     shell:
@@ -49,7 +51,7 @@ rule nanoplot_filteredfastq:
             "--threads {threads} "
             "--raw "
             "--fastq {input} "
-            "--outdir {output.outdir} "
+            "--outdir {params} "
             "> {log}"
 
 # --------------------------------------------------------------------------- #
@@ -62,13 +64,14 @@ rule nanoplot_aligned:
     input:
         os.path.join(outdir, "mapping/{sample}.bam")
     output:
-        outdir = directory(os.path.join(outdir, "qc/aligned_reads/{sample}")),
         stats = os.path.join(outdir, "qc/aligned_reads/{sample}/NanoStats.txt"),
         raw = os.path.join(outdir, "qc/aligned_reads/{sample}/NanoPlot-data.tsv.gz")
     log:
         os.path.join(outdir, "qc/aligned_reads/logs/{sample}.log")
     threads:
         config["nanoplot"]["threads"]
+    params:
+        lambda x, output: os.path.dirname(str(output.stats))
     conda:
         "../envs/nanoplot.yml"
     shell:
@@ -77,7 +80,7 @@ rule nanoplot_aligned:
             "--alength " # aligned read length
             "--raw "
             "--bam {input} "
-            "--outdir {output.outdir} "
+            "--outdir {params} "
             "> {log}"
 
 # --------------------------------------------------------------------------- #
