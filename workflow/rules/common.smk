@@ -36,7 +36,11 @@ def get_reference(wildcards):
     return(SAMPLEINFO.loc[wildcards.sample, "reference"])
 
 def get_annotation(wildcards):
-    return(SAMPLEINFO.loc[wildcards.sample, "annotation"])
+    if not pd.isna(SAMPLEINFO.loc[wildcards.sample, "annotation"]):
+        if os.path.exists(SAMPLEINFO.loc[wildcards.sample, "annotation"]):
+            return(SAMPLEINFO.loc[wildcards.sample, "annotation"])
+    else:
+        return("")
 
 def download_model_for_clair3(wildcards):
     path2model = {
