@@ -110,7 +110,7 @@ rule report:
     log:
         os.path.join(outdir, "variant_reports/logs/{sample}.report.log")
     params:
-        directory(os.path.join(outdir, "variant_reports"))
+        maskedregions = get_bed_file_for_filtering
     conda:
         "../envs/report.yml"
     script:

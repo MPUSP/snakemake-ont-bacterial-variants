@@ -281,6 +281,37 @@ endplot
 
 # Variant calling
 
+## Filtering of variants by genomic region(s)
+
+```{r masked, echo=FALSE, warning=FALSE, results = 'asis'}
+if (file.exists(snakemake@params[["maskedregions"]])) {
+  masked <- read.csv(as.character(snakemake@params[["maskedregions"]]), header = FALSE, sep = "\t", comment.char = "#", col.names = c("contig", "start", "stop"))
+  if (nrow(masked) > 0) {
+    # Correct for 0-based BED file
+    masked <- masked %>%
+      mutate(
+        start = start + 1,
+        stop = stop + 1
+      )
+    # Generate table of sites
+    cat("The following regions were filtered, possible variants in these regions are not reported below:")
+    DT::datatable(
+      masked,
+      colnames = c("contig", "start position", "end position"),
+      filter = "top",
+      options = 
+        list(
+          pageLength = 50
+        )
+    )
+  } else {
+    cat("Variants were not filtered by genomic regions (empty BED file provided).")
+  }
+} else {
+  cat("Variants were not filtered by genomic regions (no BED file provided).")
+}
+```
+
 ## Small nucleotide variants {.tabset}
 
 Single nucleotide variants and indels were identified using two different tools, Clair3 and Medaka.
@@ -355,7 +386,9 @@ if (nrow(clair) > 0) {
   clair$allele.frequency <- apply(clair, 1, get_info_for_clair3, type = "allele.frequency")
   clair$ID <- clair$filter <- clair$info <- clair$format <- clair$sample <- NULL
   clair$type <- apply(clair, 1, determine_snv_type)
-  clair <- clair[,c(1,2,8,3,4,5,6,7)]
+  clair <- clair[,c(1,2,8,3,4,5,6,7)] %>%
+    # Fix issue of T being interpreted as TRUE if no other nucleotide in the reference or alternative allele column
+    mutate_if(is.logical, as.character)
   # Create output table
   DT::datatable(
     clair,
@@ -436,7 +469,9 @@ if (nrow(medaka) > 0) {
   medaka$log2.depth.by.strand <- apply(medaka, 1, get_log2_strand_depth_for_medaka)
   medaka$ID <- medaka$filter <- medaka$info <- medaka$format <- medaka$sample <- NULL
   medaka$type <- apply(medaka, 1, determine_snv_type)
-  medaka <- medaka[,c(1,2,8,3,4,5,6,7)]
+  medaka <- medaka[,c(1,2,8,3,4,5,6,7)] %>%
+    # Fix issue of T being interpreted as TRUE if no other nucleotide in the reference or alternative allele column
+    mutate_if(is.logical, as.character)
   # Create output table
   DT::datatable(
     medaka,
@@ -469,20 +504,28 @@ if (nrow(medaka) > 0) {
 
 The following variants were identified by both Clair3 and Medaka. Please note that the two tools use different approaches to calculate the quality score of SNVs.
 
-```{r commonsnvs, echo=FALSE}
-clairdf <- as.data.frame.matrix(clair) %>%
-  select(-c("allele.frequency")) %>%
-  rename("Clair3.quality" = "quality", "Clair3.read.depth" = "read.depth")
-medakadf <- as.data.frame.matrix(medaka) %>%
-  select(-c("log2.depth.by.strand")) %>%
-  rename("Medaka.quality" = "quality", "Medaka.read.depth" = "read.depth")
-commonsnvs <- clairdf %>%
-  inner_join(medakadf, by = c("contig", "position", "type", "ref.allele", "alt.allele"))
-DT::datatable(
-  commonsnvs,
-  colnames = c("ID", "contig", "position", "type", "reference allele", "variant allele", "Clair3 quality score", "Clair3 read depth", "Medaka quality score", "Medaka read depth"),
-  filter = "top"
-)
+```{r commonsnvs, echo=FALSE, results = 'asis'}
+if ((nrow(clair) > 0 && nrow(medaka) > 0)) {
+  clairdf <- as.data.frame.matrix(clair) %>%
+    select(-c("allele.frequency")) %>%
+    rename("Clair3.quality" = "quality", "Clair3.read.depth" = "read.depth")
+  medakadf <- as.data.frame.matrix(medaka) %>%
+    select(-c("log2.depth.by.strand")) %>%
+    rename("Medaka.quality" = "quality", "Medaka.read.depth" = "read.depth")
+  commonsnvs <- clairdf %>%
+    inner_join(medakadf, by = c("contig", "position", "type", "ref.allele", "alt.allele"))
+  DT::datatable(
+    commonsnvs,
+    colnames = c("ID", "contig", "position", "type", "reference allele", "variant allele", "Clair3 quality score", "Clair3 read depth", "Medaka quality score", "Medaka read depth"),
+    filter = "top",
+    options = 
+      list(
+        pageLength = 50
+      )
+  )
+} else {
+  cat("No common variants detected by Clair3 and Medaka")
+}
 ```
 
 ***
@@ -579,32 +622,32 @@ Predicted SVs are listed below with information on:
 # Import cuteSV VCF file
 cutesv <- read.table(as.character(snakemake@input[["cutesv"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "reference", "alternative", "quality", "filter", "info", "format", "sample"))
   if (nrow(cutesv) > 0) {
-  cutesv$position <- as.numeric(as.character(cutesv$position))
-  cutesv$quality <- as.numeric(as.character(cutesv$quality))
-  # Determine SV type
-  cutesv$type <- apply(cutesv, 1, determine_sv_type)
-  cutesv$ID <- cutesv$filter <- NULL
-  # Get indel sequences
-  indelsCuteSV <- list()
-  for (row in 1:nrow(cutesv)) {
-    if (cutesv[row, "type"] == "insertion") {
-      seq <- cutesv[row, "alternative"]
-      header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
-      indelsCuteSV <- append(indelsCuteSV, c(header, seq))
-    } else if (cutesv[row, "type"] == "deletion") {
-      seq <- cutesv[row, "reference"]
-      header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
-      indelsCuteSV <- append(indelsCuteSV, c(header, seq))
+    cutesv$position <- as.numeric(as.character(cutesv$position))
+    cutesv$quality <- as.numeric(as.character(cutesv$quality))
+    # Determine SV type
+    cutesv$type <- apply(cutesv, 1, determine_sv_type)
+    cutesv$ID <- cutesv$filter <- NULL
+    # Get indel sequences
+    indelsCuteSV <- list()
+    for (row in 1:nrow(cutesv)) {
+      if (cutesv[row, "type"] == "insertion") {
+        seq <- cutesv[row, "alternative"]
+        header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
+        indelsCuteSV <- append(indelsCuteSV, c(header, seq))
+      } else if (cutesv[row, "type"] == "deletion") {
+        seq <- cutesv[row, "reference"]
+        header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
+        indelsCuteSV <- append(indelsCuteSV, c(header, seq))
+      }
     }
-  }
-  # Extract SV details
-  cutesv$allele.frequency <- apply(cutesv, 1, get_sv_details, what = "allele.frequency")
-  cutesv$allele.frequency <- round(100 * (as.numeric(as.character(cutesv$allele.frequency))), 1)
-  cutesv$read.depth <- apply(cutesv, 1, get_sv_details, what = "read.depth")
-  cutesv$details <- apply(cutesv, 1, get_sv_details, what = "details")
-  cutesv$info <- cutesv$format <- cutesv$sample <- NULL
-  cutesv$reference <-cutesv$alternative <- NULL
-  cutesv <- cutesv[,c(1,2,4,7,3,5,6)]
+    # Extract SV details
+    cutesv$allele.frequency <- apply(cutesv, 1, get_sv_details, what = "allele.frequency")
+    cutesv$allele.frequency <- round(100 * (as.numeric(as.character(cutesv$allele.frequency))), 1)
+    cutesv$read.depth <- apply(cutesv, 1, get_sv_details, what = "read.depth")
+    cutesv$details <- apply(cutesv, 1, get_sv_details, what = "details")
+    cutesv$info <- cutesv$format <- cutesv$sample <- NULL
+    cutesv$reference <-cutesv$alternative <- NULL
+    cutesv <- cutesv[,c(1,2,4,7,3,5,6)]
 } else {
   indelsCuteSV <- list()
 }
