@@ -12,14 +12,22 @@ def read_vcf(vcffile):
                 out.append(line.split("\t"))
     return(pd.DataFrame(out, columns = columnnames))
 
-def determine_svtype(short):
+def determine_type(series):
     types = {
         "DEL": "deletion",
         "INS": "insertion",
         "BND": "translocation breakend",
         "DUP": "duplication",
         "INV": "inversion"}
-    return(types[short])
+    if series["ID"].startswith("Sniffles"):
+        vartype = types[series["ID"].split(".")[1]]
+    elif series["ID"].startswith("cuteSV"):
+        vartype = types[series["ID"].split(".")[1]]
+    else:
+        if len(series["ALT"]) > len(series["REF"]): vartype = "insertion"
+        elif len(series["ALT"]) < len(series["REF"]): vartype = "deletion"
+        else: vartype = "SNV"
+    return(vartype)
 
 # Import VCF files
 medaka = read_vcf(snakemake.input["medaka"])
@@ -35,36 +43,32 @@ cutesv["TOOL"] = ["cuteSV" for i in range(cutesv.shape[0])]
 df = pd.concat([medaka, clair, sniffles, cutesv], ignore_index = True)
 df["POS"] = pd.to_numeric(df["POS"])
 df = df.sort_values(by = ["CHROM", "POS"])
+df["TYPE"] = df.apply(determine_type, axis = 1)
 
 # Select regions for resulting IGV report
 initiate = True
 regions = []
-for index, row in df.iterrows():
-    currentcontig = row["CHROM"]
-    currentposition = row["POS"]
-    if row["ID"].startswith("Sniffles"):
-        vartype = determine_svtype(row["ID"].split(".")[1])
-    elif row["ID"].startswith("cuteSV"):
-        vartype = determine_svtype(row["ID"].split(".")[1])
-    else:
-        if len(row["ALT"]) > len(row["REF"]): vartype = "insertion"
-        elif len(row["ALT"]) < len(row["REF"]): vartype = "deletion"
-        else: vartype = "SNV"
-    currentinfo = F"{vartype} at pos. {row['POS']} in {row['CHROM']} called by {row['TOOL']}"
-    if initiate:
-        entry = [currentcontig, currentposition, currentposition, currentinfo]
-        previouscontig = currentcontig
-        previousposition = currentposition
-        initiate = False
-    else:
-        currentcontig = row["CHROM"]
-        currentposition = row["POS"]
-        if (currentcontig == previouscontig) and (int(currentposition) - int(previousposition) <= 1000):
-            entry[2] = currentposition
-            entry[3] = entry[3] + "; " + currentinfo
+for contig in df["CHROM"].unique():
+    currentcontig = contig
+    for position in df[df["CHROM"] == contig]["POS"].unique():
+        for vartype in df[(df["CHROM"] == contig) & (df["POS"] == position)]["TYPE"].unique():
+            subset = df[(df["CHROM"] == contig) & (df["POS"] == position) & (df["TYPE"] == vartype)]
+            temp = []
+            for row in subset.index:
+                temp.append(F"{subset.loc[row, 'TOOL']}: quality of {subset.loc[row, 'QUAL']}")
+            vardetails = F"{vartype} at pos. {position} ({'; '.join(temp)})"
+        currentposition = position
+        if initiate:
+            entry = [currentcontig, currentposition, currentposition, vardetails]
+            previouscontig = currentcontig
+            previousposition = currentposition
+            initiate = False
+        if currentposition - previousposition <= 1000:
+                entry[2] = currentposition
+                entry[3] = entry[3] + "\n" + vardetails
         else:
             regions.append(entry)
-            entry = [currentcontig, currentposition, currentposition, currentinfo]
+            entry = [currentcontig, currentposition, currentposition, vardetails]
             previouscontig = currentcontig
             previousposition = currentposition
 regions.append(entry)
