@@ -74,7 +74,8 @@ rule filter_svs_by_regions:
         os.path.join(outdir, "SV/{tool}/{sample}.filtered.vcf")
     params:
         bed = get_bed_file_for_filtering,
-        prefix = lambda x, input: os.path.splitext(str(input))[0]
+        prefix = lambda x, input: os.path.splitext(str(input))[0],
+        minq = lambda wildcards: config["quality_threshold"][wildcards.tool]
     log:
         os.path.join(outdir, "SV/{tool}/logs/{sample}.filtering.log")
     conda:
@@ -83,6 +84,7 @@ rule filter_svs_by_regions:
         "if [ -f '{params.bed}' ]; then "
             "vcftools "
                 "--exclude-bed {params.bed} "
+                "--minQ {params.minq} "
                 "--vcf {input} "
                 "--recode "
                 "--keep-INFO-all "
@@ -90,6 +92,13 @@ rule filter_svs_by_regions:
                 "2> {log} && "
             "mv {params.prefix}.recode.vcf {output}; "
         "else "
-            "cp {input} {output} && "
+            "vcftools "
+                "--minQ {params.minq} "
+                "--vcf {input} "
+                "--recode "
+                "--keep-INFO-all "
+                "--out {params.prefix} "
+                "2> {log} && "
+            "mv {params.prefix}.recode.vcf {output} && "
             "echo 'No BED file for filtering provided' > {log}; "
         "fi "

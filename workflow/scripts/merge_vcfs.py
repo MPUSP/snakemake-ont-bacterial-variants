@@ -46,6 +46,7 @@ df = df.sort_values(by = ["CHROM", "POS"])
 df["TYPE"] = df.apply(determine_type, axis = 1)
 
 # Select regions for resulting IGV report
+distance_threshold = int(snakemake.params)
 initiate = True
 regions = []
 for contig in df["CHROM"].unique():
@@ -63,9 +64,9 @@ for contig in df["CHROM"].unique():
             previouscontig = currentcontig
             previousposition = currentposition
             initiate = False
-        if currentposition - previousposition <= 1000:
+        if (currentcontig == previouscontig) and (currentposition - previousposition) <= distance_threshold:
                 entry[2] = currentposition
-                entry[3] = entry[3] + "\n" + vardetails
+                entry[3] = entry[3] + "; " + vardetails
         else:
             regions.append(entry)
             entry = [currentcontig, currentposition, currentposition, vardetails]

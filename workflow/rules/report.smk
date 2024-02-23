@@ -39,6 +39,8 @@ rule prepare_vcfs:
         sniffles = os.path.join(outdir, "variant_reports/{sample}/{sample}.sniffles2.vcf")
     output:
         temp(os.path.join(outdir, "variant_reports/{sample}/all_variants.txt"))
+    params:
+        config["igv_region_length"]
     log:
         os.path.join(outdir, "variant_reports/logs/{sample}.prepare_vcfs.log")
     conda:
