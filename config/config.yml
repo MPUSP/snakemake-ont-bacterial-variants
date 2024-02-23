@@ -40,3 +40,13 @@ cutesv:
     - "--max_cluster_bias_DEL 100"
     - "--diff_ratio_merging_DEL 0.3"
     - "--genotype"
+
+### Variant filtering
+quality_threshold:
+  medaka: 10
+  clair3: 5
+  sniffles2: 10
+  cutesv: 5
+
+### Report
+igv_region_length: 1

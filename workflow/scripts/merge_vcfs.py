@@ -46,7 +46,7 @@ df = df.sort_values(by = ["CHROM", "POS"])
 df["TYPE"] = df.apply(determine_type, axis = 1)
 
 # Select regions for resulting IGV report
-distance_threshold = int(snakemake.params)
+distance_threshold = int(str(snakemake.params))
 initiate = True
 regions = []
 for contig in df["CHROM"].unique():
