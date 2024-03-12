@@ -47,6 +47,7 @@ quality_threshold:
   clair3: 5
   sniffles2: 10
   cutesv: 5
+remove_common_variants: True
 
 ### Report
 igv_region_length: 1

@@ -52,19 +52,21 @@ regions = []
 for contig in df["CHROM"].unique():
     currentcontig = contig
     for position in df[df["CHROM"] == contig]["POS"].unique():
+        posdetails = []
         for vartype in df[(df["CHROM"] == contig) & (df["POS"] == position)]["TYPE"].unique():
             subset = df[(df["CHROM"] == contig) & (df["POS"] == position) & (df["TYPE"] == vartype)]
             temp = []
             for row in subset.index:
                 temp.append(F"{subset.loc[row, 'TOOL']}: quality of {subset.loc[row, 'QUAL']}")
-            vardetails = F"{vartype} at pos. {position} ({'; '.join(temp)})"
+            posdetails.append(F"{vartype} at pos. {position} ({'; '.join(temp)})")
+        vardetails = "; ".join(posdetails)
         currentposition = position
         if initiate:
             entry = [currentcontig, currentposition, currentposition, vardetails]
             previouscontig = currentcontig
             previousposition = currentposition
             initiate = False
-        if (currentcontig == previouscontig) and (currentposition - previousposition) <= distance_threshold:
+        elif (currentcontig == previouscontig) and (currentposition - previousposition) <= distance_threshold:
                 entry[2] = currentposition
                 entry[3] = entry[3] + "; " + vardetails
         else:

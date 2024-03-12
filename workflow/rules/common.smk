@@ -62,3 +62,14 @@ def get_vcf(wildcards):
 
 def get_bed_file_for_filtering(wildcards):
     return(SAMPLEINFO.loc[wildcards.sample, "masked_regions"])
+
+def get_shared_variants(wildcards):
+    if config["remove_common_variants"] and len(SAMPLES) > 1:
+        return([
+            str(os.path.join(outdir, "SNV/clair3/common_variants.vcf")),
+            str(os.path.join(outdir, "SNV/medaka/common_variants.vcf")),
+            str(os.path.join(outdir, "SV/cutesv/common_variants.vcf")),
+            str(os.path.join(outdir, "SV/sniffles2/common_variants.vcf"))
+        ])
+    else:
+        return()

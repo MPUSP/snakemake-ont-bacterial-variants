@@ -31,6 +31,7 @@ wildcard_constraints: sample = "[^/|.]*"
 include: "rules/mapping.smk"
 include: "rules/small_nucleotide_variants.smk"
 include: "rules/structural_variants.smk"
+include: "rules/variant_filtering.smk"
 include: "rules/quality_control.smk"
 include: "rules/report.smk"
 

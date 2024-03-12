@@ -281,37 +281,6 @@ endplot
 
 # Variant calling
 
-## Filtering of variants by genomic region(s)
-
-```{r masked, echo=FALSE, warning=FALSE, results = 'asis'}
-if (file.exists(snakemake@params[["maskedregions"]])) {
-  masked <- read.csv(as.character(snakemake@params[["maskedregions"]]), header = FALSE, sep = "\t", comment.char = "#", col.names = c("contig", "start", "stop"))
-  if (nrow(masked) > 0) {
-    # Correct for 0-based BED file
-    masked <- masked %>%
-      mutate(
-        start = start + 1,
-        stop = stop + 1
-      )
-    # Generate table of sites
-    cat("The following regions were filtered, possible variants in these regions are not reported below:")
-    DT::datatable(
-      masked,
-      colnames = c("contig", "start position", "end position"),
-      filter = "top",
-      options = 
-        list(
-          pageLength = 50
-        )
-    )
-  } else {
-    cat("Variants were not filtered by genomic regions (empty BED file provided).")
-  }
-} else {
-  cat("Variants were not filtered by genomic regions (no BED file provided).")
-}
-```
-
 ## Small nucleotide variants {.tabset}
 
 Single nucleotide variants and indels were identified using two different tools, Clair3 and Medaka.
@@ -379,16 +348,15 @@ get_info_for_clair3 <- function(x, type) {
   }
 }
 # Import of Clair3 VCF file
-clair <- read.table(as.character(snakemake@input[["clair3"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"))
+clair <- read.table(as.character(snakemake@input[["clair3"]]), sep = "\t", header = F,
+  col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"),
+  colClasses = c("character", "integer", "character", "character", "character", "numeric", "character", "character", "character", "character"))
 if (nrow(clair) > 0) {
-  clair$quality <- as.numeric(as.character(clair$quality))
   clair$read.depth <- apply(clair, 1, get_info_for_clair3, type = "read.depth")
   clair$allele.frequency <- apply(clair, 1, get_info_for_clair3, type = "allele.frequency")
   clair$ID <- clair$filter <- clair$info <- clair$format <- clair$sample <- NULL
   clair$type <- apply(clair, 1, determine_snv_type)
-  clair <- clair[,c(1,2,8,3,4,5,6,7)] %>%
-    # Fix issue of T being interpreted as TRUE if no other nucleotide in the reference or alternative allele column
-    mutate_if(is.logical, as.character)
+  clair <- clair[,c(1,2,8,3,4,5,6,7)]
   # Create output table
   DT::datatable(
     clair,
@@ -462,16 +430,15 @@ get_log2_strand_depth_for_medaka <- function(x) {
   return(round(ratio, 3))
 }
 # Import of Medaka VCF file
-medaka <- read.table(as.character(snakemake@input[["medaka"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"))
+medaka <- read.table(as.character(snakemake@input[["medaka"]]), sep = "\t", header = F,
+  col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"),
+  colClasses = c("character", "integer", "character", "character", "character", "numeric", "character", "character", "character", "character"))
 if (nrow(medaka) > 0) {
-  medaka$quality <- as.numeric(as.character(medaka$quality))
   medaka$read.depth <- apply(medaka, 1, get_read_depth_for_medaka)
   medaka$log2.depth.by.strand <- apply(medaka, 1, get_log2_strand_depth_for_medaka)
   medaka$ID <- medaka$filter <- medaka$info <- medaka$format <- medaka$sample <- NULL
   medaka$type <- apply(medaka, 1, determine_snv_type)
-  medaka <- medaka[,c(1,2,8,3,4,5,6,7)] %>%
-    # Fix issue of T being interpreted as TRUE if no other nucleotide in the reference or alternative allele column
-    mutate_if(is.logical, as.character)
+  medaka <- medaka[,c(1,2,8,3,4,5,6,7)]
   # Create output table
   DT::datatable(
     medaka,
@@ -620,34 +587,34 @@ Predicted SVs are listed below with information on:
 
 ```{r cutesv, echo=FALSE, warning=FALSE}
 # Import cuteSV VCF file
-cutesv <- read.table(as.character(snakemake@input[["cutesv"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "reference", "alternative", "quality", "filter", "info", "format", "sample"))
-  if (nrow(cutesv) > 0) {
-    cutesv$position <- as.numeric(as.character(cutesv$position))
-    cutesv$quality <- as.numeric(as.character(cutesv$quality))
-    # Determine SV type
-    cutesv$type <- apply(cutesv, 1, determine_sv_type)
-    cutesv$ID <- cutesv$filter <- NULL
-    # Get indel sequences
-    indelsCuteSV <- list()
-    for (row in 1:nrow(cutesv)) {
-      if (cutesv[row, "type"] == "insertion") {
-        seq <- cutesv[row, "alternative"]
-        header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
-        indelsCuteSV <- append(indelsCuteSV, c(header, seq))
-      } else if (cutesv[row, "type"] == "deletion") {
-        seq <- cutesv[row, "reference"]
-        header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
-        indelsCuteSV <- append(indelsCuteSV, c(header, seq))
-      }
+cutesv <- read.table(as.character(snakemake@input[["cutesv"]]), sep = "\t", header = F,
+  col.names = c("contig", "position", "ID", "reference", "alternative", "quality", "filter", "info", "format", "sample"),
+  colClasses = c("character", "integer", "character", "character", "character", "numeric", "character", "character", "character", "character"))
+if (nrow(cutesv) > 0) {
+  # Determine SV type
+  cutesv$type <- apply(cutesv, 1, determine_sv_type)
+  cutesv$ID <- cutesv$filter <- NULL
+  # Get indel sequences
+  indelsCuteSV <- list()
+  for (row in 1:nrow(cutesv)) {
+    if (cutesv[row, "type"] == "insertion") {
+      seq <- cutesv[row, "alternative"]
+      header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
+      indelsCuteSV <- append(indelsCuteSV, c(header, seq))
+    } else if (cutesv[row, "type"] == "deletion") {
+      seq <- cutesv[row, "reference"]
+      header <- paste0(">", paste(cutesv[row, "contig"], cutesv[row, "position"], cutesv[row, "type"], "CuteSV", sep = "_"))
+      indelsCuteSV <- append(indelsCuteSV, c(header, seq))
     }
-    # Extract SV details
-    cutesv$allele.frequency <- apply(cutesv, 1, get_sv_details, what = "allele.frequency")
-    cutesv$allele.frequency <- round(100 * (as.numeric(as.character(cutesv$allele.frequency))), 1)
-    cutesv$read.depth <- apply(cutesv, 1, get_sv_details, what = "read.depth")
-    cutesv$details <- apply(cutesv, 1, get_sv_details, what = "details")
-    cutesv$info <- cutesv$format <- cutesv$sample <- NULL
-    cutesv$reference <-cutesv$alternative <- NULL
-    cutesv <- cutesv[,c(1,2,4,7,3,5,6)]
+  }
+  # Extract SV details
+  cutesv$allele.frequency <- apply(cutesv, 1, get_sv_details, what = "allele.frequency")
+  cutesv$allele.frequency <- round(100 * (as.numeric(as.character(cutesv$allele.frequency))), 1)
+  cutesv$read.depth <- apply(cutesv, 1, get_sv_details, what = "read.depth")
+  cutesv$details <- apply(cutesv, 1, get_sv_details, what = "details")
+  cutesv$info <- cutesv$format <- cutesv$sample <- NULL
+  cutesv$reference <-cutesv$alternative <- NULL
+  cutesv <- cutesv[,c(1,2,4,7,3,5,6)]
 } else {
   indelsCuteSV <- list()
 }
@@ -713,10 +680,10 @@ Predicted SVs are listed below with information on:
 
 ```{r sniffles, echo=FALSE, warning=FALSE}
 # Import Sniffles VCF file
-sniffles <- read.table(as.character(snakemake@input[["sniffles"]]), sep = "\t", header = F, col.names = c("contig", "position", "ID", "reference", "alternative", "quality", "filter", "info", "format", "sample"))
+sniffles <- read.table(as.character(snakemake@input[["sniffles"]]), sep = "\t", header = F,
+  col.names = c("contig", "position", "ID", "reference", "alternative", "quality", "filter", "info", "format", "sample"),
+  colClasses = c("character", "integer", "character", "character", "character", "numeric", "character", "character", "character", "character"))
 if (nrow(sniffles) > 0) {
-  sniffles$position <- as.numeric(as.character(sniffles$position))
-  sniffles$quality <- as.numeric(as.character(sniffles$quality))
   # Determine SV type
   sniffles$type <- apply(sniffles, 1, determine_sv_type)
   sniffles$ID <- sniffles$filter <- NULL
@@ -785,6 +752,155 @@ if (nrow(sniffles) > 0) {
 ```
 
 ***
+
+## Pre-filtering of reported variants {.tabset}
+
+### By variant quality
+
+The following quality thresholds were used for quality-based filtering of called variants:
+
+```{r qualityfilter, echo=FALSE, warning=FALSE, results = 'asis'}
+qvalues <- snakemake@config[["quality_threshold"]]
+```
+
+* Clair3: `r qvalues$clair3`
+* Medaka: `r qvalues$medaka`
+* cuteSV: `r qvalues$cutesv`
+* Sniffles2: `r qvalues$sniffles2`
+
+### By genomic region(s)
+
+```{r masked, echo=FALSE, warning=FALSE, results = 'asis'}
+if (file.exists(snakemake@params[["maskedregions"]])) {
+  masked <- read.csv(as.character(snakemake@params[["maskedregions"]]), header = FALSE, sep = "\t", comment.char = "#", col.names = c("contig", "start", "stop"), colClasses = c("character", "integer", "integer"))
+  if (nrow(masked) > 0) {
+    # Correct for 0-based BED file
+    masked <- masked %>%
+      mutate(
+        start = start + 1,
+        stop = stop + 1
+      )
+    # Generate table of sites
+    cat("The following regions were filtered, possible variants in these regions are not reported above:")
+    DT::datatable(
+      masked,
+      colnames = c("contig", "start position", "end position"),
+      filter = "top",
+      options = 
+        list(
+          pageLength = 10
+        )
+    )
+  } else {
+    cat("Variants were not filtered by genomic regions (empty BED file provided).")
+  }
+} else {
+  cat("Variants were not filtered by genomic regions (no BED file provided).")
+}
+```
+
+### By variants shared by all samples {.tabset}
+
+```{r shared, echo=FALSE, warning=FALSE, results = 'asis'}
+if (snakemake@config[["remove_common_variants"]]) {
+  sharedVariantList <- snakemake@params[["sharedvariants"]]
+  cat("Variants shared by all processed samples were filtered out. For each tool used for variant calling, variants shared by all samples were identified using `bcftools isec` and removed from each sample's VCF file using `vcftools`. The following variants were filtered for the respective tool:\n")
+} else {
+  cat("Variants shared by all processed samples were not filtered out.\n")
+  }
+```
+
+#### Clair3
+```{r shared-clair, echo=FALSE, warning=FALSE, results = 'asis'}
+if (snakemake@config[["remove_common_variants"]]) {
+  sharedByClair <- read.table(as.character(sharedVariantList[[1]]), sep = "\t", header = F,
+    col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"),
+    colClasses = c("character", "integer", "character", "character", "character", "numeric", "character", "character", "character", "character"))
+  if (nrow(sharedByClair) > 0) {
+    sharedByClair$type <- apply(sharedByClair, 1, determine_snv_type)
+    sharedByClair <- sharedByClair[,c(1,2,11,4,5)]
+    DT::datatable(
+        sharedByClair,
+        colnames = c("contig", "position", "type", "reference allele", "variant allele"),
+        filter = "top",
+        options = list(pageLength = 10)
+      )
+  } else {
+    cat("No common variants detected for all samples by Clair3.\n")
+  }
+} else{
+  cat("No filtering by shared variants enabled!")
+}
+```
+
+#### Medaka
+```{r shared-medaka, echo=FALSE, warning=FALSE, results = 'asis'}
+if (snakemake@config[["remove_common_variants"]]) {
+  sharedByMedaka <- read.table(as.character(sharedVariantList[[2]]), sep = "\t", header = F,,
+    col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"),
+    colClasses = c("character", "integer", "character", "character", "character", "numeric", "character", "character", "character", "character"))
+  if (nrow(sharedByMedaka) > 0) {
+    sharedByMedaka$type <- apply(sharedByMedaka, 1, determine_snv_type)
+    sharedByMedaka <- sharedByMedaka[,c(1,2,11,4,5)]
+    DT::datatable(
+        sharedByMedaka,
+        colnames = c("contig", "position", "type", "reference allele", "variant allele"),
+        filter = "top",
+        options = list(pageLength = 10)
+      )
+  } else {
+    cat("No common variants detected for all samples by Medaka.\n")
+  }
+} else{
+  cat("No filtering by shared variants enabled!")
+}
+```
+
+#### cuteSV
+```{r shared-cutesv, echo=FALSE, warning=FALSE, results = 'asis'}
+if (snakemake@config[["remove_common_variants"]]) {
+  sharedByCuteSV <- read.table(as.character(sharedVariantList[[3]]), sep = "\t", header = F,
+    col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"),
+    colClasses = c("character", "integer", "character", "character", "character", "numeric", "character", "character", "character", "character"))
+  if (nrow(sharedByCuteSV) > 0) {
+    sharedByCuteSV$type <- apply(sharedByCuteSV, 1, determine_sv_type)
+    sharedByCuteSV <- sharedByCuteSV[,c(1,2,11)]
+    DT::datatable(
+        sharedByCuteSV,
+        colnames = c("contig", "position", "type"),
+        filter = "top",
+        options = list(pageLength = 10)
+      )
+  } else {
+    cat("No common variants detected for all samples by cuteSV.\n")
+  }
+} else{
+  cat("No filtering by shared variants enabled!")
+}
+```
+
+#### Sniffles2
+```{r shared-sniffles, echo=FALSE, warning=FALSE, results = 'asis'}
+if (snakemake@config[["remove_common_variants"]]) {
+  sharedBySniffles <- read.table(as.character(sharedVariantList[[4]]), sep = "\t", header = F,
+    col.names = c("contig", "position", "ID", "ref.allele", "alt.allele", "quality", "filter", "info", "format", "sample"),
+    colClasses = c("character", "integer", "character", "character", "character", "numeric", "character", "character", "character", "character"))
+  if (nrow(sharedBySniffles) > 0) {
+    sharedBySniffles$type <- apply(sharedBySniffles, 1, determine_sv_type)
+    sharedBySniffles <- sharedBySniffles[,c(1,2,11)]
+    DT::datatable(
+        sharedBySniffles,
+        colnames = c("contig", "position", "type"),
+        filter = "top",
+        options = list(pageLength = 10)
+      )
+  } else {
+    cat("No common variants detected for all samples by Sniffles.\n")
+  }
+} else{
+  cat("No filtering by shared variants enabled!")
+}
+```
 
 ## Visual inspection of variants
 
