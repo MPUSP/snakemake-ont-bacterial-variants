@@ -16,12 +16,12 @@ output:
     collapsed: no
     smooth_scroll: yes
 ---
-```{r, echo=FALSE, warning=FALSE, message=FALSE}
+```{r log, echo=FALSE, warning=FALSE, message=FALSE}
 log <- file(snakemake@log[[1]], open="wt")
 sink(log)
 ```
 
-```{r, echo=FALSE, warning=FALSE, message=FALSE}
+```{r init, echo=FALSE, warning=FALSE, message=FALSE}
 library(tidyverse)
 library(DT)
 theme_update(plot.title = element_text(hjust = 0.5))
@@ -504,7 +504,7 @@ Both tools typically tend to call duplications at the beginning / end of circula
 Consequently, duplications close to contig starts with a length equal or close to the contig length can be ignored.
 Please see the VCF specifications for further details on SV annotation ([link](https://samtools.github.io/hts-specs/VCFv4.3.pdf)).
 
-```{r echo=FALSE}
+```{r functions_svs, echo=FALSE}
 determine_sv_type <- function(x) {
   svtype <- strsplit(x["ID"], "[.]")[[1]][2]
   conversion <- data.frame(

@@ -61,7 +61,7 @@ def get_vcf(wildcards):
     return(os.path.join(outdir, assigntype[wildcards.tool], "{tool}/{sample}.vcf"))
 
 def get_bed_file_for_filtering(wildcards):
-    return(SAMPLEINFO.loc[wildcards.sample, "masked_regions"])
+    return(str(SAMPLEINFO.loc[wildcards.sample, "masked_regions"]))
 
 def get_shared_variants(wildcards):
     if config["remove_common_variants"] and len(SAMPLES) > 1:
