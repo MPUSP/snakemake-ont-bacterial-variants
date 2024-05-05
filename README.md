@@ -1,4 +1,4 @@
-# Snakemake workflow: snakemake-ont-bacterial-variants
+# snakemake-ont-bacterial-variants
 
 [![Snakemake](https://img.shields.io/badge/snakemake-≥6.3.0-brightgreen.svg)](https://snakemake.github.io)
 [![GitHub actions status](https://github.com/MPUSP/snakemake-ont-bacterial-variants/workflows/Tests/badge.svg?branch=main)](https://github.com/MPUSP/snakemake-ont-bacterial-variants/actions?query=branch%3Amain+workflow%3ATests)
@@ -47,6 +47,7 @@ conda activate <ENV>
 **Important note:**
 
 All other dependencies for the workflow are **automatically pulled as `conda` environments** by snakemake, when running the workflow with the `--use-conda` parameter (recommended).
+
 When run without automatically built `conda` environments, all packages need to be installed manually:
 - `NanoPlot`
 - `MultiQC`
@@ -87,36 +88,36 @@ Input data files are provided in the `samples.tsv` table, whose location is inid
 - `annotation` provides the path to the optional reference genome annotation in `*.gff` file (may be the same for several / all samples). If no annotation is provided, you **must** enter `n/a`!
 - `masked_regions` provides the path to the optional `*.bed` file for filtering genomic regions (may be the same for several / all samples). If no `*.bed` file is provided, you **must** enter `n/a`!
 
-| sample    | fastq                        | reference                | annotation                  | masked_regions                   |
-| --------- | ---------------------------- | ------------------------ | --------------------------- | -------------------------------- |
-| <sample1> | data/fastq/<fastq1>.fastq.gz | data/reference/<ref1>.fa | data/annotation/<anno1>.gff | data/masked_region/<region1>.bed |
-| <sample2> | data/fastq/<fastq2>.fastq.gz | data/reference/<ref2>.fa | data/annotation/<anno2>.gff | data/masked_region/<region2>.bed |
-| ...       | ...                          | ...                      | ...                         | ...                              |
-| <sampleN> | data/fastq/<fastqN>.fastq.gz | data/reference/<refN>.fa | data/annotation/<annoN>.gff | data/masked_region/<regionN>.bed |
+| sample     | fastq                         | reference                 | annotation                   | masked_regions                    |
+| :--------- | :---------------------------- | :------------------------ | :--------------------------- | :-------------------------------- |
+| \<sample1> | data/fastq/\<fastq1>.fastq.gz | data/reference/\<ref1>.fa | data/annotation/\<anno1>.gff | data/masked_region/\<region1>.bed |
+| \<sample2> | data/fastq/\<fastq2>.fastq.gz | data/reference/\<ref2>.fa | data/annotation/\<anno2>.gff | data/masked_region/\<region2>.bed |
+| ...        | ...                           | ...                       | ...                          | ...                               |
+| \<sampleN> | data/fastq/\<fastqN>.fastq.gz | data/reference/\<refN>.fa | data/annotation/\<annoN>.gff | data/masked_region/\<regionN>.bed |
 
 ### Configuration and parameters
 
 Before executing the workflow, you may want to adjust several options and parameters in the default config file `config/config.yml`:
 1. Directories:
- * `indir`: Input directory for all input files, `data` by default (see above)
- * `outdir`: Output directory (relative to working directory), `results` by default
+   * `indir`: Input directory for all input files, `data` by default (see above)
+   * `outdir`: Output directory (relative to working directory), `results` by default
 2. Sample information:
- * `samples`: Path to samplesheet (relative to working directory), `samplesheet/samples.tsv` by default
- * `libprepkit`: Kit from ONT used for library preparation, e.g. `SQK-NBD114.24`
- * `basecalling_model`: Model used for basecalling of raw sequencing data (required for variant calling using `Medaka`), currently supported models are:
-  * `r1041_e82_400bps_sup_v4.2.0`
-  * `r1041_e82_400bps_sup_v4.3.0`
+   * `samples`: Path to samplesheet (relative to working directory), `samplesheet/samples.tsv` by default
+   * `libprepkit`: Kit from ONT used for library preparation, e.g. `SQK-NBD114.24`
+   * `basecalling_model`: Model used for basecalling of raw sequencing data (required for variant calling using `Medaka`), currently supported models are:
+      * `r1041_e82_400bps_sup_v4.2.0`
+      * `r1041_e82_400bps_sup_v4.3.0`
 3. Tool parameters:
- * The number of cores can be adjusted here for the following tools: `NGMLR`, `NanoPlot`, `MultiQC`, `Medaka`, `Clair3`, `Sniffles2`, and `cuteSV`
- * You may further adjust the run parameters for the following tools (please refer to the reference provided for more details on run parameters):
-  * `Filtlong`: By default, reads are filtered for a minimum length of 500 bp and a mean accuracy of at least 90% (Q10), with 90% of the longest and highest-quailty reads to be kept.
-  * `Clair3`: Variants are called on all contigs in a haploid-sensitive, ONT-specific mode using `--include_all_ctgs --haploid_sensitive --platform ont`.
-  * `cuteSV`: Variants are called with the suggested parameters for ONT data (`--max_cluster_bias_INS 100 --diff_ratio_merging_INS 0.3 --max_cluster_bias_DEL 100 --diff_ratio_merging_DEL 0.3`) and the genotyping option enabled (`--genotype`). 
+   * The number of cores can be adjusted here for the following tools: `NGMLR`, `NanoPlot`, `MultiQC`, `Medaka`, `Clair3`, `Sniffles2`, and `cuteSV`
+   * You may further adjust the run parameters for the following tools (please refer to the reference provided for more details on run parameters):
+      * `Filtlong`: By default, reads are filtered for a minimum length of 500 bp and a mean accuracy of at least 90% (Q10), with 90% of the longest and highest-quailty reads to be kept.
+      * `Clair3`: Variants are called on all contigs in a haploid-sensitive, ONT-specific mode using `--include_all_ctgs --haploid_sensitive --platform ont`.
+      * `cuteSV`: Variants are called with the suggested parameters for ONT data (`--max_cluster_bias_INS 100 --diff_ratio_merging_INS 0.3 --max_cluster_bias_DEL 100 --diff_ratio_merging_DEL 0.3`) and the genotyping option enabled (`--genotype`). 
 4. Filtering of variants:
- * The variant quality thresholds can be adjusted here for all four variant callers
- * `remove_common_variants`: If `True`, variants which have been identified in all samples with the same reference genome by one tool are filtered out. This is helpful in case all samples derive from a strain, whose genome sequence already differs from the used reference sequence. If `False`, all variants are reported.
+   * The variant quality thresholds can be adjusted here for all four variant callers
+   * `remove_common_variants`: If `True`, variants which have been identified in all samples with the same reference genome by one tool are filtered out. This is helpful in case all samples derive from a strain, whose genome sequence already differs from the used reference sequence. If `False`, all variants are reported.
 5. Reporting options:
- * `igv_region_length`: Neighboring variants with a maximum bp distance indicated here [1 by default] are reported in one region in the IGV variant report. Increasing this parameter will reduce the file size of the resulting IGV HTML report, if hotspots / regions with many variants exist in a sample.
+   * `igv_region_length`: Neighboring variants with a maximum bp distance indicated here [1 by default] are reported in one region in the IGV variant report. Increasing this parameter will reduce the file size of the resulting IGV HTML report, if hotspots / regions with many variants exist in a sample.
 
 ### Execution
 
@@ -163,7 +164,7 @@ Log files from the generation of above reports can be found in `variant_reports/
 
 ### Additional output files
 
-In addition, the workflow generates the following output files:
+In addition, the workflow generates the following output files in the corresponding directories:
 
 <details markdown="1">
 <summary>filtered_reads</summary>
