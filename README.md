@@ -33,7 +33,7 @@ If you would like to contribute, report issues, or suggest features, please get 
 Step 1: Install snakemake with `conda` in a new conda environment.
 
 ```
-conda create -n <ENV> snakemake
+conda create -n <ENV> snakemake pandas
 ```
 
 Step 2: Activate conda environment with snakemake
@@ -142,7 +142,7 @@ snakemake --cores 10 --use-conda
 You may also run the workflow on the provided test data using:
 
 ```
-snakemake --cores 10 --use-conda --all-temp --directory .test
+snakemake --cores 10 --use-conda --directory .test
 ```
 
 ## Output

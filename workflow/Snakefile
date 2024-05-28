@@ -8,22 +8,32 @@
 #          For all 3rd party tools separate licenses may apply.               #
 # --------------------------------------------------------------------------- #
 
+
 # --------------------------------------------------------------------------- #
 # Set paths and parameters for workflow                                       #
 # --------------------------------------------------------------------------- #
 configfile: "config/config.yml"
+
+
 rootdir = os.getcwd()
 indir = os.path.join(rootdir, config["indir"])
 outdir = os.path.join(rootdir, config["outdir"])
+
 
 # --------------------------------------------------------------------------- #
 # Retrieve sample information from config.yml                                 #
 # --------------------------------------------------------------------------- #
 include: "rules/common.smk"
+
+
 SAMPLEINFO = read_sample_sheet()
 SAMPLES = list(SAMPLEINFO["sample"])
 GENOMES = list_reference_genomes()
-wildcard_constraints: sample = "[^/|.]*"
+
+
+wildcard_constraints:
+    sample="[^/|.]*",
+
 
 # --------------------------------------------------------------------------- #
 # Include sub-workflows                                                       #
@@ -35,6 +45,7 @@ include: "rules/variant_filtering.smk"
 include: "rules/quality_control.smk"
 include: "rules/report.smk"
 
+
 rule all:
     input:
-        generate_results
+        generate_results,
