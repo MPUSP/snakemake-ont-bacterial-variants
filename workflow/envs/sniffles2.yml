@@ -1,6 +1,6 @@
 name: sniffles2
 channels:
-  - bioconda
   - conda-forge
+  - bioconda
 dependencies:
   - sniffles=2.2

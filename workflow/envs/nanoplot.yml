@@ -1,6 +1,6 @@
 name: nanoplot
 channels:
-  - bioconda
   - conda-forge
+  - bioconda
 dependencies:
   - nanoplot=1.42.0

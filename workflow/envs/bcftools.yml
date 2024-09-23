@@ -1,6 +1,6 @@
 name: bcftools
 channels:
-  - bioconda
   - conda-forge
+  - bioconda
 dependencies:
   - bcftools=1.19
