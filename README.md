@@ -1,8 +1,10 @@
 # snakemake-ont-bacterial-variants
 
+![Platform](https://img.shields.io/badge/platform-all-green)
 [![Snakemake](https://img.shields.io/badge/snakemake-≥6.3.0-brightgreen.svg)](https://snakemake.github.io)
-[![GitHub actions status](https://github.com/MPUSP/snakemake-ont-bacterial-variants/workflows/Tests/badge.svg?branch=main)](https://github.com/MPUSP/snakemake-ont-bacterial-variants/actions?query=branch%3Amain+workflow%3ATests)
+[![Tests](https://github.com/MPUSP/snakemake-ont-bacterial-variants/actions/workflows/main.yml/badge.svg)](https://github.com/MPUSP/snakemake-ont-bacterial-variants/actions/workflows/main.yml)
 [![run with conda](http://img.shields.io/badge/run%20with-conda-3EB049?labelColor=000000&logo=anaconda)](https://docs.conda.io/en/latest/)
+[![workflow catalog](https://img.shields.io/badge/Snakemake%20workflow%20catalog-darkgreen)](https://snakemake.github.io/snakemake-workflow-catalog)
 
 A Snakemake workflow for the identification of variants in bacterial genomes using nanopore long-read sequencing.
 

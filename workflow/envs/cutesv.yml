@@ -1,6 +1,6 @@
 name: cutesv
 channels:
-  - bioconda
   - conda-forge
+  - bioconda
 dependencies:
   - cutesv=2.1.0

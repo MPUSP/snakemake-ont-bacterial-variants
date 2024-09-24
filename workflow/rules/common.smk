@@ -14,7 +14,8 @@ def list_reference_genomes():
     paths = SAMPLEINFO["reference"].unique()
     genomes = {}
     for path in paths:
-        ident = ".".join(path.split('/')[-1].split(".")[:-1])
+        ident = os.path.basename(path)
+        ident = os.path.splitext(ident)[0]
         if not ident in genomes.keys():
             genomes[ident] = path
     return genomes
@@ -51,10 +52,10 @@ def download_model_for_clair3(wildcards):
         "r1041_e82_400bps_sup_v4.2.0": "https://cdn.oxfordnanoportal.com/software/analysis/models/clair3/r1041_e82_400bps_sup_v420.tar.gz",
         "r1041_e82_400bps_sup_v4.3.0": "https://cdn.oxfordnanoportal.com/software/analysis/models/clair3/r1041_e82_400bps_sup_v430.tar.gz",
     }
-    return (
-        path2model[config["basecalling_model"]],
-        path2model[config["basecalling_model"]].split('/')[-1].split(".tar.gz")[0],
-    )
+    model = path2model[config["basecalling_model"]]
+    model_name = os.path.basename(model)
+    model_name = model_name.replace(".tar.gz", "")
+    return (model, model_name)
 
 
 def get_medaka_model(wildcards):
