@@ -1,0 +1,173 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+type: object
+description: Configuration schema for the workflow.
+properties:
+  indir:
+    type: string
+    description: Input directory containing workflow data files.
+    default: data
+  outdir:
+    type: string
+    description: Output directory for all generated results.
+    default: results
+  samples:
+    type: string
+    description: Path to the sample sheet TSV file.
+    default: samplesheet/samples.tsv
+  libprepkit:
+    type: string
+    description: Oxford Nanopore library preparation kit identifier.
+    default: SQK-NBD114.24
+  basecalling_model:
+    type: string
+    description: Basecalling model identifier used by Dorado.
+    default: r1041_e82_400bps_sup_v4.3.0
+  filtlong:
+    type: object
+    description: Filtlong filtering options.
+    properties:
+      params:
+        type: array
+        description: List of command-line parameters passed to Filtlong.
+        items:
+          type: string
+          description: Single command-line argument for Filtlong.
+          default: ""
+    required:
+      - params
+  ngmlr:
+    type: object
+    description: NGMLR resource settings.
+    properties:
+      threads:
+        type: integer
+        description: Number of CPU threads allocated to NGMLR.
+        default: 20
+    required:
+      - threads
+  nanoplot:
+    type: object
+    description: NanoPlot resource settings.
+    properties:
+      threads:
+        type: integer
+        description: Number of CPU threads allocated to NanoPlot.
+        default: 5
+    required:
+      - threads
+  multiqc:
+    type: object
+    description: MultiQC resource settings.
+    properties:
+      threads:
+        type: integer
+        description: Number of CPU threads allocated to MultiQC.
+        default: 5
+    required:
+      - threads
+  medaka:
+    type: object
+    description: Medaka resource settings.
+    properties:
+      threads:
+        type: integer
+        description: Number of CPU threads allocated to Medaka.
+        default: 10
+    required:
+      - threads
+  clair3:
+    type: object
+    description: Clair3 resource and parameter settings.
+    properties:
+      threads:
+        type: integer
+        description: Number of CPU threads allocated to Clair3.
+        default: 10
+      params:
+        type: array
+        description: List of command-line parameters passed to Clair3.
+        items:
+          type: string
+          description: Single command-line argument for Clair3.
+          default: ""
+    required:
+      - threads
+      - params
+  sniffles2:
+    type: object
+    description: Sniffles2 resource settings.
+    properties:
+      threads:
+        type: integer
+        description: Number of CPU threads allocated to Sniffles2.
+        default: 10
+    required:
+      - threads
+  cutesv:
+    type: object
+    description: cuteSV resource and parameter settings.
+    properties:
+      threads:
+        type: integer
+        description: Number of CPU threads allocated to cuteSV.
+        default: 10
+      params:
+        type: array
+        description: List of command-line parameters passed to cuteSV.
+        items:
+          type: string
+          description: Single command-line argument for cuteSV.
+          default: ""
+    required:
+      - threads
+      - params
+  quality_threshold:
+    type: object
+    description: Minimum quality score thresholds for variant filtering by caller.
+    properties:
+      medaka:
+        type: integer
+        description: Minimum QUAL threshold for Medaka variants.
+        default: 10
+      clair3:
+        type: integer
+        description: Minimum QUAL threshold for Clair3 variants.
+        default: 5
+      sniffles2:
+        type: integer
+        description: Minimum QUAL threshold for Sniffles2 variants.
+        default: 10
+      cutesv:
+        type: integer
+        description: Minimum QUAL threshold for cuteSV variants.
+        default: 5
+    required:
+      - medaka
+      - clair3
+      - sniffles2
+      - cutesv
+  remove_common_variants:
+    type: boolean
+    description: Filter out variants observed across all samples sharing a reference genome.
+    default: true
+  igv_region_length:
+    type: integer
+    description: Maximum base-pair distance to merge neighboring variants into one IGV report region.
+    default: 1
+required:
+  - indir
+  - outdir
+  - samples
+  - libprepkit
+  - basecalling_model
+  - filtlong
+  - ngmlr
+  - nanoplot
+  - multiqc
+  - medaka
+  - clair3
+  - sniffles2
+  - cutesv
+  - quality_threshold
+  - remove_common_variants
+  - igv_region_length

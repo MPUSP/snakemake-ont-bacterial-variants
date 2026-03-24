@@ -2,94 +2,69 @@
 # Raw read QC                                                                 #
 # --------------------------------------------------------------------------- #
 rule nanoplot_rawfastq:
-    """QC on raw nanopore reads"""
-    message:
-        "--- Read QC, raw"
     input:
-        get_fastq,
+        fastq=get_fastq,
     output:
+        report=os.path.join(outdir, "qc/raw_reads/{sample}/report.html"),
         stats=os.path.join(outdir, "qc/raw_reads/{sample}/NanoStats.txt"),
         raw=os.path.join(outdir, "qc/raw_reads/{sample}/NanoPlot-data.tsv.gz"),
     log:
         os.path.join(outdir, "qc/raw_reads/logs/{sample}.log"),
     threads: config["nanoplot"]["threads"]
     params:
-        lambda x, output: os.path.dirname(str(output.stats)),
-    conda:
-        "../envs/nanoplot.yml"
-    shell:
-        "NanoPlot "
-        "--threads {threads} "
-        "--raw "
-        "--fastq {input} "
-        "--outdir {params} "
-        "> {log}"
+        extra="--raw",
+    message:
+        "--- Read QC, raw"
+    wrapper:
+        "https://raw.githubusercontent.com/MPUSP/mpusp-snakemake-wrappers/refs/heads/main/nanoplot"
 
 
 # --------------------------------------------------------------------------- #
 # Filtered read QC                                                            #
 # --------------------------------------------------------------------------- #
 rule nanoplot_filteredfastq:
-    """QC on filtered nanopore reads"""
-    message:
-        "--- Read QC, filtered"
     input:
-        os.path.join(outdir, "filtered_reads/{sample}.fastq.gz"),
+        fastq=os.path.join(outdir, "filtered_reads/{sample}.fastq.gz"),
     output:
+        report=os.path.join(outdir, "qc/filtered_reads/{sample}/report.html"),
         stats=os.path.join(outdir, "qc/filtered_reads/{sample}/NanoStats.txt"),
         raw=os.path.join(outdir, "qc/filtered_reads/{sample}/NanoPlot-data.tsv.gz"),
     log:
         os.path.join(outdir, "qc/filtered_reads/logs/{sample}.log"),
     threads: config["nanoplot"]["threads"]
     params:
-        lambda x, output: os.path.dirname(str(output.stats)),
-    conda:
-        "../envs/nanoplot.yml"
-    shell:
-        "NanoPlot "
-        "--threads {threads} "
-        "--raw "
-        "--fastq {input} "
-        "--outdir {params} "
-        "> {log}"
+        extra="--raw",
+    message:
+        "--- Read QC, filtered"
+    wrapper:
+        "https://raw.githubusercontent.com/MPUSP/mpusp-snakemake-wrappers/refs/heads/main/nanoplot"
 
 
 # --------------------------------------------------------------------------- #
 # Aligned reads QC                                                            #
 # --------------------------------------------------------------------------- #
 rule nanoplot_aligned:
-    """QC on aligned read regions"""
-    message:
-        "--- Read QC, aligned region"
     input:
-        os.path.join(outdir, "mapping/{sample}.bam"),
+        bam=os.path.join(outdir, "mapping/{sample}.bam"),
     output:
+        report=os.path.join(outdir, "qc/aligned_reads/{sample}/report.html"),
         stats=os.path.join(outdir, "qc/aligned_reads/{sample}/NanoStats.txt"),
         raw=os.path.join(outdir, "qc/aligned_reads/{sample}/NanoPlot-data.tsv.gz"),
     log:
         os.path.join(outdir, "qc/aligned_reads/logs/{sample}.log"),
     threads: config["nanoplot"]["threads"]
     params:
-        lambda x, output: os.path.dirname(str(output.stats)),
-    conda:
-        "../envs/nanoplot.yml"
-    shell:
-        "NanoPlot "
-        "--threads {threads} "
-        "--alength "
-        "--raw "
-        "--bam {input} "
-        "--outdir {params} "
-        "> {log}"
+        extra="--raw",
+    message:
+        "--- Read QC, aligned region"
+    wrapper:
+        "https://raw.githubusercontent.com/MPUSP/mpusp-snakemake-wrappers/refs/heads/main/nanoplot"
 
 
 # --------------------------------------------------------------------------- #
 # Merge QC reports using MultiQC                                              #
 # --------------------------------------------------------------------------- #
 rule multiqc:
-    """Merge QC reports using MultiQC"""
-    message:
-        "--- MultiQC"
     input:
         expand(rules.nanoplot_rawfastq.output.stats, sample=SAMPLES),
         expand(rules.nanoplot_filteredfastq.output.stats, sample=SAMPLES),
@@ -100,11 +75,13 @@ rule multiqc:
         final=os.path.join(outdir, "variant_reports/MultiQC.html"),
     log:
         os.path.join(outdir, "qc/multiqc/multiqc.log"),
+    conda:
+        "../envs/multiqc.yml"
     threads: config["multiqc"]["threads"]
     params:
         qcdir=lambda x, output: os.path.dirname(str(output.outdir)),
-    conda:
-        "../envs/multiqc.yml"
+    message:
+        "--- MultiQC"
     shell:
         "multiqc "
         "--force "
