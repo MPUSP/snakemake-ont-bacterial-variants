@@ -1,0 +1,24 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: entries for the sample sheet
+properties:
+  sample:
+    type: string
+    description: sample name/identifier
+  fastq:
+    type: string
+    description: path to fastq.gz file
+  reference:
+    type: string
+    description: path to reference genome file in FASTA format
+  annotation:
+    type: string
+    description: path to annotation file in GFF format
+  masked_regions:
+    type: string
+    description: path to BED file containing masked regions of the reference genome
+
+required:
+  - sample
+  - fastq
+  - reference
+  - annotation
