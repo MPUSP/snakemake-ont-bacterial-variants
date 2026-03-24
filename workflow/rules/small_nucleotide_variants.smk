@@ -20,7 +20,7 @@ rule snv_medaka:
     conda:
         "../envs/medaka.yml"
     shell:
-        "medaka_haploid_variant "
+        "medaka_variant "
         "-m {params.model} "
         "-t {threads} "
         "-o {output.medakadir} "
@@ -39,10 +39,10 @@ rule models_clair3:
     message:
         "--- Downloading models for Clair3"
     output:
-        directory(os.path.join(outdir, "SNV/clair3/model")),
+        directory(os.path.join(outdir, "SNV/models/clair3/")),
     log:
-        stdout=os.path.join(outdir, "SNV/clair3/logs/model.stdout"),
-        stderr=os.path.join(outdir, "SNV/clair3/logs/model.stderr"),
+        stdout=os.path.join(outdir, "SNV/models/clair3/logs/model.stdout"),
+        stderr=os.path.join(outdir, "SNV/models/clair3/logs/model.stderr"),
     params:
         download_model_for_clair3,
     conda:
